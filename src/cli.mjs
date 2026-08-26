@@ -14,6 +14,7 @@ import {
   verifyAttestation,
 } from "./did.mjs";
 import { hashJson, readJson, writeJson } from "./core.mjs";
+import { REPRO_CONTRACT_HASH, compareReports, reproHashes } from "./repro.mjs";
 
 const HELP = `AlphaGraph — Proof of Useful Strategy
 
@@ -22,6 +23,7 @@ Usage:
   alphagraph demo-data [--output FILE] [--bars NUMBER]
   alphagraph fetch-binance --symbol SYMBOL --interval INTERVAL --start ISO --end ISO [--output FILE]
   alphagraph backtest --proposal FILE --data CSV [--output FILE]
+  alphagraph reproduce --report FILE --data CSV [--output FILE]
   alphagraph attest --artifact FILE --identity PEM --role ROLE --verdict VERDICT --statement TEXT [options]
   alphagraph verify --artifact FILE --attestation FILE
   alphagraph dashboard [--reports DIR] [--output FILE]
@@ -38,7 +40,8 @@ Attest options:
   --output FILE                Attestation output path.
 
 Passphrase fallback:
-  If --keychain-service is omitted, set TRADECORE_PASSPHRASE in the environment.
+  If --keychain-service is omitted, set ALPHAGRAPH_PASSPHRASE in the environment.
+  (TRADECORE_PASSPHRASE is still accepted for existing keys.)
 
 Safety:
   Backtests and the dashboard are research artifacts, not trading instructions.
@@ -145,6 +148,7 @@ async function backtest(args) {
     sha256: hashJson(proposal),
     strategyHash: proposal.strategyHash,
   };
+  report.reproduction = reproHashes(report);
   const output = resolve(args.output ?? defaultOutput("reports", strategy.id, report.data.sha256));
   await writeJson(output, report);
   return {
@@ -160,7 +164,36 @@ function identityPassphrase(args) {
   if (args["keychain-service"]) {
     return passphraseFromKeychain(args["keychain-service"], args["keychain-account"]);
   }
-  return process.env.TRADECORE_PASSPHRASE;
+  return process.env.ALPHAGRAPH_PASSPHRASE ?? process.env.TRADECORE_PASSPHRASE;
+}
+
+async function reproduce(args) {
+  if (!args.report || !args.data) throw new Error("reproduce requires --report FILE and --data CSV.");
+  const authorReport = await readJson(args.report);
+  const strategy = validateStrategy(authorReport.strategy);
+  if (hashJson(strategy) !== authorReport.strategyHash) {
+    throw new Error("Report strategy hash does not match its contents.");
+  }
+  const candidate = await backtestFromCsv(strategy, args.data);
+  const comparison = compareReports(authorReport, candidate);
+  const record = {
+    schema: "alphagraph-reproduction-v1",
+    grade: 1,
+    contract: { schema: "alphagraph-repro-contract-v1", hash: REPRO_CONTRACT_HASH },
+    ...comparison,
+  };
+  const output = resolve(args.output ?? defaultOutput("reproductions", strategy.id, comparison.candidate.canonicalHash));
+  await writeJson(output, record);
+  if (!comparison.reproduced) process.exitCode = 1;
+  return {
+    message: comparison.reproduced
+      ? "Grade-1 reproduction succeeded. Sign it with: alphagraph attest --verdict reproduced"
+      : `Grade-1 reproduction failed (${comparison.verdict}).`,
+    output,
+    verdict: comparison.verdict,
+    note: comparison.note,
+    differences: comparison.differences,
+  };
 }
 
 async function attest(args) {
@@ -225,7 +258,7 @@ async function publish(args) {
 async function keygen(args) {
   if (!args.output) throw new Error("keygen requires --output PEM.");
   const passphrase = identityPassphrase(args);
-  if (!passphrase) throw new Error("Set TRADECORE_PASSPHRASE or use --keychain-service to encrypt the new key.");
+  if (!passphrase) throw new Error("Set ALPHAGRAPH_PASSPHRASE or use --keychain-service to encrypt the new key.");
   const { privateKey } = generateKeyPairSync("ed25519");
   const pem = privateKey.export({
     format: "pem",
@@ -286,6 +319,7 @@ export async function runCli(argv) {
   if (command === "demo-data") return demoData(args);
   if (command === "fetch-binance") return fetchBinance(args);
   if (command === "backtest") return backtest(args);
+  if (command === "reproduce") return reproduce(args);
   if (command === "attest") return attest(args);
   if (command === "verify") return verify(args);
   if (command === "dashboard") return dashboard(args);

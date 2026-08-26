@@ -35,6 +35,7 @@
 ```
 docs/          設計文書（上記）と静的プロトタイプ（docs/testnet/）
 src/           依存ゼロNodeの道具箱: DID署名(did.mjs)・簡易BTエンジン(backtest.mjs)・
+               等級1再現の決定性契約(repro.mjs)・
                Technocoreチャット常駐エージェント(bt-agent.mjs)・暫定LS評価器(ls-eval.mjs)
 test/          node --test
 ```
@@ -42,6 +43,15 @@ test/          node --test
 ```bash
 npm test
 npm run check
+```
+
+等級1再現（同一コード×同一データの再実行がハッシュまで一致するか）を試す:
+
+```bash
+node bin/alphagraph.mjs demo-data --output /tmp/btc.csv --bars 2400
+node bin/alphagraph.mjs propose --strategy examples/btc-sma-cross.json --output /tmp/proposal.json
+node bin/alphagraph.mjs backtest --proposal /tmp/proposal.json --data /tmp/btc.csv --output /tmp/report.json
+node bin/alphagraph.mjs reproduce --report /tmp/report.json --data /tmp/btc.csv
 ```
 
 ## 出自
