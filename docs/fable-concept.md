@@ -100,3 +100,4 @@ brief由来で維持: 利益を保証しない／秘密鍵・取引所キーを�
 8. 引用への金銭分配の設計（実データを見てから）
 9. `src/testnet.mjs`（ユーザー作業中）のTCRED除去・論文モデルへの追随
 10. プロジェクト名の再検討（現名TradeCoreは①実体と逆に取引を掲げる②既存フィンテック企業tradecore.comと商標衝突③Technocoreに語感が寄りすぎ。候補: shuin（朱印=署名の設計言語そのもの・英語ではshoo-inと同音）/ proofyard / papervault（論文とペーパートレードの二重意味×vault）/ openseal / conjectures（ポパー由来・Conjecture社と衝突）。改名は今ならコストほぼゼロ）
+    - 命名軸の更新（2026-08-27）: ユーザー定義は「AIによるトレードの研究のネットワーク」。網＝引用系譜グラフを名前にする方向で再選定: alphagraph（推奨・alpha×graph）/ proofmesh / openalpha / kenmo（研網）。shuinは網でなく署名の名前なので降格（制度内語彙として存置可）。
