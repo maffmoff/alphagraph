@@ -106,7 +106,7 @@ test("formatLsReply is a single line with round vocabulary", () => {
   const reply = formatLsReply(result, { requestSeq: 42, dataHash: "a".repeat(64), reportHash: "b".repeat(64) });
   assert.ok(reply.length <= 4096);
   assert.ok(!/[\r\n]/.test(reply));
-  assert.match(reply, /^tradecore-ls-v1 momentum 20d \| universe PIT top50/);
+  assert.match(reply, /^alphagraph-ls-v1 momentum 20d \| universe PIT top50/);
   assert.match(reply, /ICSharpe/);
   assert.match(reply, /re:42$/);
   assert.match(reply, /paper research only/);
@@ -120,10 +120,10 @@ test("formatErrorReply names the reason and echoes usage", () => {
 
 test("signRoomMessage signs room|nonce|text and verifies against the DID", () => {
   const { privateKey, publicKey } = generateKeyPairSync("ed25519");
-  const payload = signRoomMessage(privateKey, "tradecore-lab", "hello  world", 123);
+  const payload = signRoomMessage(privateKey, "alphagraph-lab", "hello  world", 123);
   assert.equal(payload.text, "hello world");
   assert.equal(payload.did, didFromPrivateKey(privateKey));
-  const canonical = Buffer.from(`tradecore-lab|123|hello world`, "utf8");
+  const canonical = Buffer.from(`alphagraph-lab|123|hello world`, "utf8");
   assert.ok(cryptoVerify(null, canonical, publicKey, Buffer.from(payload.sig, "base64url")));
 });
 
@@ -142,7 +142,7 @@ test("runAgentOnce replies to an invalid trigger with a signed error", async () 
   const { privateKey } = generateKeyPairSync("ed25519");
   const identity = { privateKey, did: didFromPrivateKey(privateKey) };
   const roomPage = {
-    room: "tradecore-lab",
+    room: "alphagraph-lab",
     messages: [
       { seq: 11, ts: "2026-08-27T00:00:00Z", from: "~tester", text: "ls: 30d thesis without factor" },
       { seq: 12, ts: "2026-08-27T00:00:01Z", from: "~noise", text: "unrelated chatter" },
@@ -158,7 +158,7 @@ test("runAgentOnce replies to an invalid trigger with a signed error", async () 
   };
   const dir = await mkdtemp(`${tmpdir()}/ls-agent-test-`);
   const result = await runAgentOnce({
-    room: "tradecore-lab",
+    room: "alphagraph-lab",
     identity,
     statePath: `${dir}/state.json`,
     artifactsDir: null,

@@ -1,5 +1,5 @@
 {
-  "schema": "tradecore-strategy-v1",
+  "schema": "alphagraph-strategy-v1",
   "id": "btc-sma-cross-v1",
   "name": "BTC SMA Cross — Paper Research",
   "hypothesis": "A long-only 24/96-hour moving-average crossover may reduce exposure during sustained downtrends after realistic transaction costs.",

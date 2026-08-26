@@ -9,7 +9,7 @@ import {
 import { sha256 } from "../src/core.mjs";
 
 const strategy = {
-  schema: "tradecore-strategy-v1",
+  schema: "alphagraph-strategy-v1",
   id: "btc-test-v1",
   name: "Test strategy",
   hypothesis: "A deterministic test hypothesis.",

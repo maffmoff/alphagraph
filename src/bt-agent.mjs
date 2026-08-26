@@ -7,7 +7,7 @@ import { didFromPrivateKey } from "./did.mjs";
 import { evaluateCrossSection, fetchDailySeries, fetchUsdtPool } from "./ls-eval.mjs";
 
 const BASE_URL = "https://technocore.chat";
-const TRIGGER = /^\s*(?:!ls|ls:|@tradecore)\s+/i;
+const TRIGGER = /^\s*(?:!ls|ls:|@alphagraph)\s+/i;
 const FACTORS = new Set(["momentum", "reversal", "vol", "volume"]);
 const PER_AUTHOR_PER_DAY = 3;
 const GLOBAL_PER_DAY = 40;
@@ -69,7 +69,7 @@ const fixed = (value, digits = 3) => (value === null || value === undefined ? "n
 export function formatLsReply(result, { requestSeq, dataHash, reportHash }) {
   const horizons = result.ic.perHorizonMean;
   const line = [
-    `tradecore-ls-v1 ${result.factor} ${result.lookback}d`,
+    `alphagraph-ls-v1 ${result.factor} ${result.lookback}d`,
     `universe PIT top${result.universe.target} (mean ${result.universe.meanObserved})`,
     `days ${result.days} (${result.firstDay}..${result.lastDay})`,
     `IC h1 ${fixed(horizons.h1)} h2 ${fixed(horizons.h2)} h3 ${fixed(horizons.h3)} h4 ${fixed(horizons.h4)}`,
@@ -95,7 +95,7 @@ export function formatErrorReply(error, requestSeq) {
   const reason = reasons[error.code] ?? error.code;
   const detail = error.detail ? ` (${cleanSingleLine(error.detail, 120)})` : "";
   return cleanSingleLine(
-    `tradecore-ls-v1 error re:${requestSeq} ${reason}${detail} | usage: ls: momentum|reversal|vol|volume 30d [from 2024-01-01] [to 2026-08-01] your thesis | ${DISCLAIMER}`,
+    `alphagraph-ls-v1 error re:${requestSeq} ${reason}${detail} | usage: ls: momentum|reversal|vol|volume 30d [from 2024-01-01] [to 2026-08-01] your thesis | ${DISCLAIMER}`,
   );
 }
 
@@ -198,7 +198,7 @@ export async function executeLsRequest(request, { fetchImpl = fetch, artifactsDi
     end: request.end,
   });
   const artifact = {
-    schema: "tradecore-ls-agent-run-v1",
+    schema: "alphagraph-ls-agent-run-v1",
     createdAt: new Date().toISOString(),
     request,
     pool: { size: pool.length, symbols: pool },

@@ -2,7 +2,7 @@
 
 作成: 2026-08-26 / ブランチ: `design/fable-testnet` / 状態: **ドラフト（数値・日程は人間承認前）**
 
-前提: `docs/fable-concept.md` §3。TradeCoreは「異質な仮説の書庫（順位なし）」と「同質なラウンドの競技場（順位あり・信頼区間つき）」の二層を持つ。この文書は後者の設計標準と、第1回の具体案。
+前提: `docs/fable-concept.md` §3。AlphaGraphは「異質な仮説の書庫（順位なし）」と「同質なラウンドの競技場（順位あり・信頼区間つき）」の二層を持つ。この文書は後者の設計標準と、第1回の具体案。
 
 設計手順は北山朝也「botterのためのKaggle金融予測コンペの設計史」のチェックリスト7項目に従う。観測スコアの分解 Q̂ = Q + δ_regime + ε_sampling + b_feedback + b_protocol の各項を、どの設計で抑えるかを明示する。
 
@@ -90,7 +90,7 @@
 ### 台帳との接続
 
 - ラウンド生成・論文登録・日次実行・target確定・採点・賞金支払いはすべて台帳イベント（`ROUND_OPENED` / `PAPER_SEALED` / `SIGNALS_GENERATED` / `TARGET_PUBLISHED` / `ROUND_SCORED` / `PAYOUT`）。
-- `src/testnet.mjs` の signal/target スキーマ（`tradecore-signal-v1` / `tradecore-target-v1`、ユニバース3〜200銘柄）は本仕様と整合。TCRED（faucet/stake/会計）部分のみ改修が必要。
+- `src/testnet.mjs` の signal/target スキーマ（`alphagraph-signal-v1` / `alphagraph-target-v1`、ユニバース3〜200銘柄）は本仕様と整合。TCRED（faucet/stake/会計）部分のみ改修が必要。
 - 各イベントはTechnocoreの`mb-`部屋へ署名付き告知（ハッシュ＋正本URL）を流す（fable-concept §6）。
 
 ---

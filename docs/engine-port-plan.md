@@ -13,10 +13,10 @@ bot-2509 `services/backtest_v2` の構成（実測LOC）:
 
 **Phase A — Rustコアの独立化（本命・約3,300行の機械的移植）**
 
-1. `backtest_engine_rs` をtradecoreへfork（`engine-rs/`）。engine/exec_cost/position_state/price_lookup/adv_lookup/config/types はほぼそのまま。
+1. `backtest_engine_rs` をalphagraphへfork（`engine-rs/`）。engine/exec_cost/position_state/price_lookup/adv_lookup/config/types はほぼそのまま。
 2. pyo3境界を除去し、serdeで `ProcessSignalsRequest`（ABI v6のミラー）を定義。**stdin JSON → stdout JSON のCLIバイナリ**にする（WASM化は後続オプション）。
 3. error-contract（116行）はvendor。credential・インフラ依存はもともと無い（純計算）。
-4. **golden parity**: bot-2509側で合成入力のpayload+結果ペアをdumpしてfixtureとしてtradecoreにコミット。CIで移植バイナリが同一出力を再現することを常時検証。「結果は一致するか？」に fixtures で YES と答えられる状態を作る。
+4. **golden parity**: bot-2509側で合成入力のpayload+結果ペアをdumpしてfixtureとしてalphagraphにコミット。CIで移植バイナリが同一出力を再現することを常時検証。「結果は一致するか？」に fixtures で YES と答えられる状態を作る。
 
 **Phase B — 薄いオーケストレーション**
 

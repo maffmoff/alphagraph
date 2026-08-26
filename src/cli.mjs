@@ -15,20 +15,20 @@ import {
 } from "./did.mjs";
 import { hashJson, readJson, writeJson } from "./core.mjs";
 
-const HELP = `TradeCore — Proof of Useful Strategy
+const HELP = `AlphaGraph — Proof of Useful Strategy
 
 Usage:
-  tradecore propose --strategy FILE [--output FILE]
-  tradecore demo-data [--output FILE] [--bars NUMBER]
-  tradecore fetch-binance --symbol SYMBOL --interval INTERVAL --start ISO --end ISO [--output FILE]
-  tradecore backtest --proposal FILE --data CSV [--output FILE]
-  tradecore attest --artifact FILE --identity PEM --role ROLE --verdict VERDICT --statement TEXT [options]
-  tradecore verify --artifact FILE --attestation FILE
-  tradecore dashboard [--reports DIR] [--output FILE]
-  tradecore publish --attestation FILE --confirm PUBLISH
-  tradecore demo
-  tradecore keygen --output PEM
-  tradecore bt-agent --room ROOM --identity PEM [once]
+  alphagraph propose --strategy FILE [--output FILE]
+  alphagraph demo-data [--output FILE] [--bars NUMBER]
+  alphagraph fetch-binance --symbol SYMBOL --interval INTERVAL --start ISO --end ISO [--output FILE]
+  alphagraph backtest --proposal FILE --data CSV [--output FILE]
+  alphagraph attest --artifact FILE --identity PEM --role ROLE --verdict VERDICT --statement TEXT [options]
+  alphagraph verify --artifact FILE --attestation FILE
+  alphagraph dashboard [--reports DIR] [--output FILE]
+  alphagraph publish --attestation FILE --confirm PUBLISH
+  alphagraph demo
+  alphagraph keygen --output PEM
+  alphagraph bt-agent --room ROOM --identity PEM [once]
 
 Attest options:
   --keychain-service SERVICE   Read the PEM passphrase from macOS Keychain.
@@ -71,7 +71,7 @@ async function propose(args) {
   const strategy = validateStrategy(await readJson(args.strategy));
   const strategyHash = hashJson(strategy);
   const proposal = {
-    schema: "tradecore-proposal-v1",
+    schema: "alphagraph-proposal-v1",
     createdAt: new Date().toISOString(),
     strategy,
     strategyHash,
@@ -120,13 +120,13 @@ async function fetchBinance(args) {
 async function backtest(args) {
   if (!args.proposal || !args.data) throw new Error("backtest requires --proposal FILE and --data CSV.");
   const proposal = await readJson(args.proposal);
-  if (proposal.schema !== "tradecore-proposal-v1") throw new Error("Expected a tradecore-proposal-v1 artifact.");
+  if (proposal.schema !== "alphagraph-proposal-v1") throw new Error("Expected a alphagraph-proposal-v1 artifact.");
   const strategy = validateStrategy(proposal.strategy);
   if (hashJson(strategy) !== proposal.strategyHash) throw new Error("Proposal strategy hash does not match its contents.");
   const report = await backtestFromCsv(strategy, args.data);
   if (args.provenance) {
     const provenance = await readJson(args.provenance);
-    if (provenance.schema !== "tradecore-market-data-v1") throw new Error("Unsupported provenance schema.");
+    if (provenance.schema !== "alphagraph-market-data-v1") throw new Error("Unsupported provenance schema.");
     if (provenance.csvSha256 !== report.data.sha256) throw new Error("Provenance CSV hash does not match the tested data.");
     if (provenance.symbol !== strategy.market.symbol || provenance.interval !== strategy.market.interval) {
       throw new Error("Provenance market does not match the strategy market.");
@@ -210,7 +210,7 @@ async function publish(args) {
   const attestation = await readJson(args.attestation);
   const result = await publishTechnocoreAttestation(attestation);
   const receipt = {
-    schema: "tradecore-technocore-receipt-v1",
+    schema: "alphagraph-technocore-receipt-v1",
     publishedAt: new Date().toISOString(),
     did: attestation.did,
     artifact: attestation.artifact,

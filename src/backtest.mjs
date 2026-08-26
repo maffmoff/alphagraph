@@ -21,7 +21,7 @@ const SUPPORTED_INTERVALS = new Map([
 
 export function validateStrategy(input) {
   assertPlainObject(input, "strategy");
-  if (input.schema !== "tradecore-strategy-v1") throw new Error("strategy.schema must be tradecore-strategy-v1.");
+  if (input.schema !== "alphagraph-strategy-v1") throw new Error("strategy.schema must be alphagraph-strategy-v1.");
   const id = assertString(input.id, "strategy.id", { max: 48, pattern: STRATEGY_ID });
   const name = assertString(input.name, "strategy.name", { max: 120 });
   const hypothesis = assertString(input.hypothesis, "strategy.hypothesis", { max: 1000 });
@@ -65,7 +65,7 @@ export function validateStrategy(input) {
   });
 
   return {
-    schema: "tradecore-strategy-v1",
+    schema: "alphagraph-strategy-v1",
     id,
     name,
     hypothesis,
@@ -290,10 +290,10 @@ export function runBacktest(strategyInput, bars, { dataHash = null, dataLabel = 
   };
 
   return {
-    schema: "tradecore-backtest-v1",
+    schema: "alphagraph-backtest-v1",
     createdAt: new Date().toISOString(),
     engine: {
-      name: "tradecore",
+      name: "alphagraph",
       version: "0.2.0",
       timing: "Signal uses bar close; position changes at the next bar open. Final position is liquidated at the last open.",
     },

@@ -4,7 +4,7 @@ import { renderDashboard } from "../src/dashboard.mjs";
 
 test("renders report summaries and escapes untrusted strategy text", () => {
   const html = renderDashboard([{
-    schema: "tradecore-backtest-v1",
+    schema: "alphagraph-backtest-v1",
     createdAt: "2026-08-26T00:00:00.000Z",
     strategy: {
       id: "unsafe-v1",

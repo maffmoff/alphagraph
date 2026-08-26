@@ -7,7 +7,7 @@
 
 ## 型の選択: ブロックチェーンではなく透明性ログ
 
-TradeCoreの台帳はCertificate Transparency / Sigstore型の**透明性ログ**とする。
+AlphaGraphの台帳はCertificate Transparency / Sigstore型の**透明性ログ**とする。
 
 - 書き手（sequencer）は運営者ただ一人。ただし改竄・遅延・削除は**誰にでも検出可能**。
 - 信頼モデルは「防止」でなく「検出」。これによりコンセンサス機構が不要になり、追記専用ファイル＋静的生成という最小構成で成立する。
@@ -41,7 +41,7 @@ TradeCoreの台帳はCertificate Transparency / Sigstore型の**透明性ログ*
 
 ## 部品5: 検証CLI
 
-- `tradecore verify-ledger`: 連鎖の連続性／全署名／アンカー包含証明／commit-reveal整合を一括検査。既存 `verify` の拡張。
+- `alphagraph verify-ledger`: 連鎖の連続性／全署名／アンカー包含証明／commit-reveal整合を一括検査。既存 `verify` の拡張。
 - 独立DIDによる定期検証の実行を**検証労働として報酬対象**にし、監査を自走させる（fable-concept §5の検証労働支払いと接続）。
 
 ## 作らないもの

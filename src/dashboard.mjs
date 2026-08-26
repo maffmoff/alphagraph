@@ -41,7 +41,7 @@ export function renderDashboard(reports) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>TradeCore — Proof of Useful Strategy</title>
+  <title>AlphaGraph — Proof of Useful Strategy</title>
   <style>
     :root{color-scheme:dark;--bg:#070a0f;--panel:#101721;--line:#273446;--text:#eef5ff;--muted:#8fa2b8;--lime:#b8ff64;--amber:#ffc857}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,#163540 0,transparent 35%),var(--bg);color:var(--text);font:15px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}.wrap{max-width:1180px;margin:auto;padding:56px 24px}header{display:flex;justify-content:space-between;align-items:end;gap:24px;margin-bottom:32px}h1{margin:0;font-size:clamp(30px,5vw,64px);letter-spacing:-.06em}h1 span{color:var(--lime)}p{color:var(--muted);max-width:700px}.stats{display:flex;gap:12px}.card{border:1px solid var(--line);background:#0d141dcc;border-radius:14px;padding:12px 18px;min-width:110px}.card strong{display:block;font-size:24px;color:var(--lime)}.card small,td small{display:block;color:var(--muted)}.table{overflow:auto;border:1px solid var(--line);border-radius:16px;background:var(--panel)}table{width:100%;border-collapse:collapse;min-width:900px}th,td{text-align:left;padding:16px;border-bottom:1px solid var(--line)}th{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.status{font-weight:800;font-size:12px;padding:5px 8px;border-radius:999px}.pass{background:#1c3b25;color:var(--lime)}.review{background:#3f321b;color:var(--amber)}code{color:#77d9ff}footer{margin-top:24px;color:var(--muted);font-size:12px}@media(max-width:700px){header{display:block}.stats{margin-top:20px}.wrap{padding:32px 16px}}
   </style>
@@ -63,7 +63,7 @@ export async function buildDashboard(reportDirectory, outputPath) {
   const reports = [];
   for (const file of files) {
     const report = JSON.parse(await readFile(join(reportDirectory, file), "utf8"));
-    if (report.schema === "tradecore-backtest-v1") reports.push(report);
+    if (report.schema === "alphagraph-backtest-v1") reports.push(report);
   }
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, renderDashboard(reports), "utf8");

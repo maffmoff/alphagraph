@@ -108,11 +108,11 @@ export function createAttestation(artifact, options) {
     throw new Error("Verdict must be proposed, reproduced, challenged, or forward-tested.");
   }
   const statement = cleanSingleLine(options.statement, 500);
-  const canonical = `tradecore-attestation-v1|${artifactHash}|${role}|${verdict}|${statement}`;
+  const canonical = `alphagraph-attestation-v1|${artifactHash}|${role}|${verdict}|${statement}`;
   const did = didFromPrivateKey(options.privateKey);
   const signature = signText(options.privateKey, canonical);
   const attestation = {
-    schema: "tradecore-attestation-v1",
+    schema: "alphagraph-attestation-v1",
     createdAt: new Date().toISOString(),
     did,
     artifact: {
@@ -133,7 +133,7 @@ export function createAttestation(artifact, options) {
     if (!/^\d{1,19}$/.test(nonce)) throw new Error("Technocore nonce must contain 1-19 digits.");
     const publicUrl = options.artifactUrl ? new URL(options.artifactUrl).toString() : "unpublished";
     const message = cleanSingleLine([
-      "tradecore-proof-v1",
+      "alphagraph-proof-v1",
       `artifact:${artifactHash}`,
       `role:${role}`,
       `verdict:${verdict}`,
@@ -155,9 +155,9 @@ export function createAttestation(artifact, options) {
 }
 
 export function verifyAttestation(attestation, artifact) {
-  if (attestation?.schema !== "tradecore-attestation-v1") throw new Error("Unsupported attestation schema.");
+  if (attestation?.schema !== "alphagraph-attestation-v1") throw new Error("Unsupported attestation schema.");
   const artifactHash = hashJson(artifact);
-  const canonical = `tradecore-attestation-v1|${artifactHash}|${attestation.role}|${attestation.verdict}|${attestation.statement}`;
+  const canonical = `alphagraph-attestation-v1|${artifactHash}|${attestation.role}|${attestation.verdict}|${attestation.statement}`;
   const valid = artifactHash === attestation.artifact?.sha256
     && canonical === attestation.canonical
     && cryptoVerify(

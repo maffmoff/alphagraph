@@ -194,7 +194,7 @@ export function evaluateCrossSection(series, options) {
   const spreadStd = std(spreadDaily);
 
   return {
-    schema: "tradecore-ls-eval-v1",
+    schema: "alphagraph-ls-eval-v1",
     factor,
     lookback,
     horizons: HORIZONS,

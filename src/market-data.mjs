@@ -104,7 +104,7 @@ export async function fetchBinanceKlines(options, fetchImpl = fetch) {
   return {
     csv,
     provenance: {
-      schema: "tradecore-market-data-v1",
+      schema: "alphagraph-market-data-v1",
       source: "Binance public spot market-data API",
       endpoint,
       documentation: "https://developers.binance.com/en/docs/products/spot/rest-api",

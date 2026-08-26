@@ -64,5 +64,5 @@
 
 ## 8b. Technocore接続（方針決定済み・fable-concept §6）
 
-- 台帳イベント→Technocore投稿の写像: `PAPER_SEALED`→`tradecore-proposal-v1`、`RESULT_PUBLISHED`→`tradecore-proof-v1`、反証の`EVALUATION_SIGNED`→`tradecore-challenge-v1`、ペーパー開始/終了の`STAGE_CHANGED`→`tradecore-forward-v1`。投稿内容はハッシュ＋正本URLのみ（Technocoreは非永続の証人であり正本ではない）。
+- 台帳イベント→Technocore投稿の写像: `PAPER_SEALED`→`alphagraph-proposal-v1`、`RESULT_PUBLISHED`→`alphagraph-proof-v1`、反証の`EVALUATION_SIGNED`→`alphagraph-challenge-v1`、ペーパー開始/終了の`STAGE_CHANGED`→`alphagraph-forward-v1`。投稿内容はハッシュ＋正本URLのみ（Technocoreは非永続の証人であり正本ではない）。
 - 公式告知部屋は署名必須の`mb-`部屋。UIは各イベントに対応するTechnocore投稿URL（時刻証明の傍証）を併記できるとよい。

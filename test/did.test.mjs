@@ -9,7 +9,7 @@ import {
 } from "../src/did.mjs";
 
 const artifact = {
-  schema: "tradecore-backtest-v1",
+  schema: "alphagraph-backtest-v1",
   strategyHash: "abc123",
   metrics: { outOfSample: { netReturnPct: 1.5 } },
 };
@@ -21,14 +21,14 @@ test("signs and verifies an artifact with an Ed25519 did:key", () => {
     role: "reproducer",
     verdict: "reproduced",
     statement: "Independent deterministic reproduction.",
-    technocoreRoom: "tradecore-lab",
+    technocoreRoom: "alphagraph-lab",
     artifactUrl: "https://example.com/report.json",
     nonce: "1700000000000",
   });
   assert.equal(attestation.did, didFromPrivateKey(privateKey));
   assert.match(attestation.did, /^did:key:z6Mk/);
   assert.equal(verifyAttestation(attestation, artifact).valid, true);
-  assert.match(attestation.technocore.writeUrl, /^https:\/\/technocore\.chat\/r\/tradecore-lab\/say-signed\//);
+  assert.match(attestation.technocore.writeUrl, /^https:\/\/technocore\.chat\/r\/alphagraph-lab\/say-signed\//);
 });
 
 test("detects artifact and statement tampering", () => {
@@ -50,7 +50,7 @@ test("publishes only the prebuilt Technocore URL and surfaces failures", async (
     role: "proposer",
     verdict: "proposed",
     statement: "Locked before evaluation.",
-    technocoreRoom: "tradecore-lab",
+    technocoreRoom: "alphagraph-lab",
   });
   let requested;
   const success = await publishTechnocoreAttestation(attestation, async (url) => {
