@@ -99,3 +99,4 @@ brief由来で維持: 利益を保証しない／秘密鍵・取引所キーを�
 7. FLOPの実体確認（発行権・換金性）と発行体との調整
 8. 引用への金銭分配の設計（実データを見てから）
 9. `src/testnet.mjs`（ユーザー作業中）のTCRED除去・論文モデルへの追随
+10. プロジェクト名の再検討（現名TradeCoreは①実体と逆に取引を掲げる②既存フィンテック企業tradecore.comと商標衝突③Technocoreに語感が寄りすぎ。候補: shuin（朱印=署名の設計言語そのもの・英語ではshoo-inと同音）/ proofyard / papervault（論文とペーパートレードの二重意味×vault）/ openseal / conjectures（ポパー由来・Conjecture社と衝突）。改名は今ならコストほぼゼロ）
