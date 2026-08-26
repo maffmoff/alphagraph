@@ -15,6 +15,9 @@ import {
 } from "./did.mjs";
 import { hashJson, readJson, writeJson } from "./core.mjs";
 import { REPRO_CONTRACT_HASH, compareReports, reproHashes } from "./repro.mjs";
+import { citationLedger, sealPaper } from "./paper.mjs";
+import { appendEvent, readLedger, verifyChain } from "./ledger.mjs";
+import { fetchHyperliquidCandles, fetchHyperliquidUniverse } from "./data-source.mjs";
 
 const HELP = `AlphaGraph — Proof of Useful Strategy
 
@@ -24,6 +27,11 @@ Usage:
   alphagraph fetch-binance --symbol SYMBOL --interval INTERVAL --start ISO --end ISO [--output FILE]
   alphagraph backtest --proposal FILE --data CSV [--output FILE]
   alphagraph reproduce --report FILE --data CSV [--output FILE]
+  alphagraph seal --paper FILE --identity PEM [--ledger DIR] [--output FILE]
+  alphagraph ledger-verify [--ledger DIR]
+  alphagraph citations [--ledger DIR]
+  alphagraph hl-universe [--output FILE]
+  alphagraph fetch-hl --coin COIN --interval INTERVAL --start ISO --end ISO [--output FILE]
   alphagraph attest --artifact FILE --identity PEM --role ROLE --verdict VERDICT --statement TEXT [options]
   alphagraph verify --artifact FILE --attestation FILE
   alphagraph dashboard [--reports DIR] [--output FILE]
@@ -196,6 +204,93 @@ async function reproduce(args) {
   };
 }
 
+async function seal(args) {
+  if (!args.paper || !args.identity) throw new Error("seal requires --paper FILE and --identity PEM.");
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const sealed = sealPaper(await readJson(args.paper));
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  // 台帳に載るのは commitment（ハッシュ・型・公開予定・引用・データ釘）だけ。
+  // 主張も方法も出ない。これが封緘＝commit-reveal の commit 側。
+  const { event, path } = await appendEvent(ledgerDir, {
+    type: "PAPER_SEALED",
+    data: sealed.commitment,
+    privateKey: identity.privateKey,
+  });
+  const record = {
+    schema: "alphagraph-sealed-paper-v1",
+    paperHash: sealed.paperHash,
+    sealedBy: identity.did,
+    ledger: { seq: event.seq, eventHash: event.hash, at: event.at },
+    commitment: sealed.commitment,
+    paper: sealed.paper,
+  };
+  const output = resolve(args.output ?? defaultOutput("sealed", sealed.paper.id, sealed.paperHash));
+  await writeJson(output, record);
+  return {
+    message: "Paper sealed. Only the commitment is on the ledger; the full text stays local until reveal.",
+    output,
+    ledgerEvent: path,
+    paperHash: sealed.paperHash,
+    did: identity.did,
+    seq: event.seq,
+  };
+}
+
+async function ledgerVerify(args) {
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const result = verifyChain(await readLedger(ledgerDir));
+  if (!result.valid) process.exitCode = 1;
+  return { message: result.valid ? "Ledger chain is intact." : "Ledger chain is BROKEN.", ledger: ledgerDir, ...result };
+}
+
+async function citations(args) {
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const events = await readLedger(ledgerDir);
+  const graph = citationLedger(events.filter((event) => event.type === "PAPER_SEALED").map((event) => event.data));
+  return {
+    message: "Citation graph folded from the ledger. Counts are kept per kind; unsigned totals are never used.",
+    papers: graph.length,
+    nodes: graph.map((node) => ({
+      id: node.id ?? null,
+      paperHash: node.paperHash.slice(0, 12),
+      type: node.type ?? "external",
+      cites: node.cites.map((citation) => `${citation.kind}:${citation.paperHash.slice(0, 12)}`),
+      citedBy: node.counts,
+    })),
+  };
+}
+
+async function hlUniverse(args) {
+  const result = await fetchHyperliquidUniverse();
+  const output = resolve(args.output ?? "data/hl-universe.json");
+  await writeJson(output, { schema: "alphagraph-universe-v1", provenance: result.provenance, coins: result.coins });
+  return { message: "Hyperliquid perp universe downloaded from the public info API. No credentials were used.", output, coins: result.coins.length };
+}
+
+async function fetchHl(args) {
+  for (const required of ["coin", "interval", "start", "end"]) {
+    if (!args[required]) throw new Error(`fetch-hl requires --${required}.`);
+  }
+  const result = await fetchHyperliquidCandles({
+    coin: args.coin,
+    interval: args.interval,
+    start: args.start,
+    end: args.end,
+  });
+  const output = resolve(args.output ?? `data/hl-${args.coin.toLowerCase()}-${args.interval}.csv`);
+  await mkdir(resolve(output, ".."), { recursive: true });
+  await writeFile(output, result.csv, "utf8");
+  const provenanceOutput = `${output}.source.json`;
+  await writeJson(provenanceOutput, result.provenance);
+  return {
+    message: "Public Hyperliquid candles downloaded. No API key, wallet, or signature was used.",
+    output,
+    provenance: provenanceOutput,
+    bars: result.provenance.received.bars,
+    sha256: result.provenance.csvSha256,
+  };
+}
+
 async function attest(args) {
   for (const required of ["artifact", "identity", "role", "verdict", "statement"]) {
     if (!args[required]) throw new Error(`attest requires --${required}.`);
@@ -320,6 +415,11 @@ export async function runCli(argv) {
   if (command === "fetch-binance") return fetchBinance(args);
   if (command === "backtest") return backtest(args);
   if (command === "reproduce") return reproduce(args);
+  if (command === "seal") return seal(args);
+  if (command === "ledger-verify") return ledgerVerify(args);
+  if (command === "citations") return citations(args);
+  if (command === "hl-universe") return hlUniverse(args);
+  if (command === "fetch-hl") return fetchHl(args);
   if (command === "attest") return attest(args);
   if (command === "verify") return verify(args);
   if (command === "dashboard") return dashboard(args);

@@ -54,7 +54,7 @@ export function didFromPrivateKey(privateKey) {
   return `did:key:z${base58Encode(Buffer.concat([ED25519_MULTICODEC, Buffer.from(jwk.x, "base64url")]))}`;
 }
 
-function publicKeyFromDid(did) {
+export function publicKeyFromDid(did) {
   if (!String(did).startsWith("did:key:z")) throw new Error("Only did:key:z Ed25519 identifiers are supported.");
   const decoded = base58Decode(String(did).slice("did:key:z".length));
   if (decoded.length !== 34 || !decoded.subarray(0, 2).equals(ED25519_MULTICODEC)) {
@@ -74,7 +74,7 @@ function cleanSingleLine(value, limit = 4096) {
   return cleaned;
 }
 
-function signText(privateKey, text) {
+export function signText(privateKey, text) {
   return cryptoSign(null, Buffer.from(text, "utf8"), privateKey).toString("base64url");
 }
 

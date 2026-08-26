@@ -1,0 +1,47 @@
+{
+  "schema": "alphagraph-ledger-event-v1",
+  "seq": 3,
+  "at": "2026-08-26T20:03:16.609Z",
+  "type": "PAPER_SEALED",
+  "data": {
+    "paperHash": "ddf3ed42819bf9d6fffa59be424e0baa0b20b30ec538c67ed2ee9cf86c184203",
+    "type": "strategy",
+    "id": "ag-s-0001",
+    "disclosure": {
+      "policy": "embargo",
+      "embargoDays": 90
+    },
+    "citations": [
+      {
+        "kind": "depends-on",
+        "paperHash": "26e5ca1730b9c3fffca6a1d025e34f20e11a9d7520051bb8733703817c2e5037"
+      },
+      {
+        "kind": "depends-on",
+        "paperHash": "28c026c0e76b06ace71e9e0bda232c6487daeb729a21c5fb9bbc5a26129acc9d"
+      }
+    ],
+    "dataPins": [
+      {
+        "seriesId": "hl:BTC:1d:2025-08-01/2026-08-25",
+        "sha256": "59c0fc83f83f1ec3482cfce9045aded022b4dfdae9f039e8ae9505e5b12c12e0",
+        "redistributable": true
+      },
+      {
+        "seriesId": "hl:ETH:1d:2025-08-01/2026-08-25",
+        "sha256": "d083815563bacf1998f29f3be6e0db89d7d043c6272c7db2e108ffd97e09a0b4",
+        "redistributable": true
+      },
+      {
+        "seriesId": "hl:SOL:1d:2025-08-01/2026-08-25",
+        "sha256": "79d695a3a8a500850b49671edb8a9aef194b59f130a26c4fa141f3dc70df8ef8",
+        "redistributable": true
+      }
+    ]
+  },
+  "prevHash": "1e078c48e25d532079b1ded2fcebda4d2dd1c8226c3f4655058981b7691757a9",
+  "authorDid": "did:key:z6MkrHpTidvhcgLJ6UVbNFinjEDKLjoeeoKudqvMBg5x1iaj",
+  "canonical": "alphagraph-ledger-v1|3|2026-08-26T20:03:16.609Z|PAPER_SEALED|effc1bea8a0021e06ade6624fdc8ca9e0d6c0eb0617cef204b1bff0265d0926f|1e078c48e25d532079b1ded2fcebda4d2dd1c8226c3f4655058981b7691757a9",
+  "signature": "ENClY6aNJNAgznOfVulcKBsSVJiyRUjM4hXoKdK3FzAIzYI3VfCB8tYoqUuREJcZkwbrBNyfkW7UY9jiAP1RAA",
+  "hash": "1df045a527fa837b2d973aebc566ca663867378c611a968580bd2a21329ff4cc"
+}
