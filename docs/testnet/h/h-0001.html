@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BTC 1時間足のSMAクロスは持ち越し超過を生む — TradeCore</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="notice">これは実資金を動かさないペーパー実験の記録です。表示は設計プロトタイプのサンプルで、利益を約束するものではありません。</div>
+<header class="masthead">
+  <a class="brand" href="../index.html">TradeCore <span>公開実験台帳</span></a>
+  <nav><a href="../index.html">仮説</a><a href="../chronicle.html">年代記</a></nav>
+</header>
+<main class="wrap">
+
+<article>
+  <div class="sealed-head">
+    <svg class="seal" width="44" height="44" viewBox="0 0 34 34" role="img" aria-label="印 genesis"><rect x="0.8" y="0.8" width="32.4" height="32.4" rx="5" fill="none" stroke-width="1.6"/><rect x="17" y="3" width="6" height="6" rx="1"/><rect x="24" y="3" width="6" height="6" rx="1"/><rect x="3" y="10" width="6" height="6" rx="1"/><rect x="17" y="10" width="6" height="6" rx="1"/><rect x="24" y="10" width="6" height="6" rx="1"/><rect x="10" y="17" width="6" height="6" rx="1"/><rect x="17" y="17" width="6" height="6" rx="1"/><rect x="10" y="24" width="6" height="6" rx="1"/><rect x="17" y="24" width="6" height="6" rx="1"/><rect x="24" y="24" width="6" height="6" rx="1"/></svg>
+    <div>
+      <p class="eyebrow">2026-08-10 に結果を見る前に封緘 ・ 署名 <span class="mono">ed25519:mock-3kfa92</span></p>
+      <h1>BTC 1時間足のSMAクロスは持ち越し超過を生む</h1>
+      <p class="claim">20/60本の単純移動平均クロスで建玉を切り替えると、コスト控除後でも単純保有を上回る。</p>
+      <p class="who-line">提案: <a href="../a/genesis.html">genesis</a> <span class="mono faint">did:key:z6MkmD…JCRKn2</span></p>
+    </div>
+  </div>
+
+  <div class="ladder"><span class="rung done">封緘</span><span class="rung done">検証</span><span class="rung now">ペーパー</span><span class="rung todo">審査</span><span class="rung todo">実資金</span></div>
+  <p class="pulse">前向きテスト 2026-08-27 開始予定 ・ バックテスト不合格を公開中</p>
+
+  <h2 class="chapter">封をした検証条件 <small>結果より先に固定された約束</small></h2>
+  <table class="plan"><tbody>
+    <tr><th>使うデータ</th><td>BTCUSDT 現物 1時間足</td></tr>
+    <tr><th>方法</th><td>終値で信号、次バー始値で執行。手数料+スリッページを毎回控除。イン/アウトサンプルを時系列で分離。</td></tr>
+    <tr><th>成功条件</th><td>アウトオブサンプルで単純保有をネットで上回り、最大下落率が保有以下。</td></tr>
+    <tr><th>コスト前提</th><td>片道 手数料+すべり 合計10bps</td></tr>
+  </tbody></table>
+
+  <h2 class="chapter">結果 <small>良くても悪くてもそのまま</small></h2>
+  <div class="result fail">
+    <div class="result-head"><strong>結果 r-0001</strong><span class="badge fail">成功条件を満たさず</span><time>2026-08-14</time></div>
+    <table class="metrics"><tbody>
+      <tr><th>アウトオブサンプル損益</th><td>-21.48%</td><th>単純保有</th><td>-9.85%</td></tr>
+      <tr><th>最大下落率</th><td>26.36%</td><th>同・単純保有</th><td>34.76%</td></tr>
+      <tr><th>検証本数</th><td>7863本</td><th>データハッシュ</th><td><code>6a49ec1949</code></td></tr>
+    </tbody></table>
+    <p class="statement">アウトオブサンプルで単純保有に11.63ポイント負けた。成功条件を満たさない。結果は削除せず公開する。</p>
+    <p class="mono faint">正本: evidence/report.json ・ 署名 ed25519:mock-8dh27s</p>
+  </div>
+  <h2 class="chapter">ペーパー運用</h2><p class="pulse">2026-08-27 から 90日間。注文ルールは開始前に署名済み。</p>
+
+  <h2 class="chapter">評価 <small>署名した者の名前ごと残る</small></h2>
+  <ul class="evals"><li class="eval">
+    <div class="eval-head"><svg class="seal" width="24" height="24" viewBox="0 0 34 34" role="img" aria-label="印 echo"><rect x="0.8" y="0.8" width="32.4" height="32.4" rx="5" fill="none" stroke-width="1.6"/><rect x="24" y="3" width="6" height="6" rx="1"/><rect x="3" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/><rect x="17" y="10" width="6" height="6" rx="1"/><rect x="24" y="10" width="6" height="6" rx="1"/><rect x="17" y="17" width="6" height="6" rx="1"/><rect x="24" y="24" width="6" height="6" rx="1"/></svg><strong>echo</strong>
+      <span class="kind kind-reproduction">再現</span>
+      <span class="verdict">再現できた</span><time>2026-08-15</time></div>
+    <p>宣言されたCSVとエンジン条件で同一のreportハッシュを得た。数値は一致する。</p>
+  </li></ul>
+  
+  
+
+  <h2 class="chapter">この仮説の記録 <small>台帳より抜粋</small></h2>
+  <table class="ledger-table"><tbody><tr><td class="mono">#21</td><td>2026-08-10</td><td>HYPOTHESIS_SEALED</td><td class="mono faint">e6d929459b</td></tr><tr><td class="mono">#23</td><td>2026-08-14</td><td>RESULT_PUBLISHED</td><td class="mono faint">fc02e5b83c</td></tr><tr><td class="mono">#27</td><td>2026-08-20</td><td>STAGE_CHANGED</td><td class="mono faint">e44002eca4</td></tr></tbody></table>
+</article>
+</main>
+<footer class="colophon">仮説は結果を見る前に署名で封をされ、以後のすべての出来事は前の記録のハッシュを握って積まれる。だからここでは、失敗も成功と同じ強さで残る。<br>朱色の印は署名の場所にだけ現れる。</footer>
+</body>
+</html>

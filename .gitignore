@@ -1,0 +1,7 @@
+artifacts/
+data/
+site/
+*.pem
+.env
+.DS_Store
+

@@ -1,0 +1,19 @@
+{
+  "name": "tradecore",
+  "version": "0.2.0",
+  "description": "DID-attested, reproducible AI trading strategy research for Technocore.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "bin": {
+    "tradecore": "./bin/tradecore.mjs"
+  },
+  "scripts": {
+    "check": "node --check bin/tradecore.mjs && node --check src/cli.mjs && node --check src/core.mjs && node --check src/backtest.mjs && node --check src/did.mjs && node --check src/dashboard.mjs && node --check src/market-data.mjs && node --check src/bt-agent.mjs && node --check src/ls-eval.mjs",
+    "test": "node --test",
+    "demo": "node bin/tradecore.mjs demo"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

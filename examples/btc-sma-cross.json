@@ -1,0 +1,26 @@
+{
+  "schema": "tradecore-strategy-v1",
+  "id": "btc-sma-cross-v1",
+  "name": "BTC SMA Cross — Paper Research",
+  "hypothesis": "A long-only 24/96-hour moving-average crossover may reduce exposure during sustained downtrends after realistic transaction costs.",
+  "market": {
+    "venue": "binance-spot-reference",
+    "symbol": "BTCUSDT",
+    "interval": "1h"
+  },
+  "rules": {
+    "type": "sma-cross",
+    "fast": 24,
+    "slow": 96,
+    "position": "long_only"
+  },
+  "costs": {
+    "feeBps": 10,
+    "slippageBps": 5
+  },
+  "evaluation": {
+    "holdoutFraction": 0.3,
+    "minHoldoutBars": 720,
+    "maxDrawdownPct": 25
+  }
+}
