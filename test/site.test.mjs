@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendEvent } from "../src/ledger.mjs";
-import { buildGraph, buildSite } from "../src/site.mjs";
+import { buildGraph, buildSite, networkMetrics } from "../src/site.mjs";
 
 const hash = (character) => character.repeat(64);
 
@@ -44,6 +44,38 @@ test("a citation to a paper outside the ledger draws no edge", () => {
   const graph = buildGraph([node]);
   assert.equal(graph.length, 1);
   assert.equal(graph[0].depth, 0);
+});
+
+test("the instrument measures connection and reproduction, not paper count", () => {
+  const root = commitment("ag-a", "dataset");
+  const child = commitment("ag-b", "empirical", [{ kind: "depends-on", paperHash: root.paperHash }]);
+  const lonely = commitment("ag-c", "strategy");
+  const graph = buildGraph([root, child, lonely]);
+
+  const empty = networkMetrics(graph, []);
+  assert.equal(empty.papers, 3);
+  assert.equal(empty.connected, 2);
+  assert.equal(empty.isolated, 1);
+  assert.equal(empty.connectedRate, 66.7);
+  assert.equal(empty.reproducedRate, 0);
+
+  const measured = networkMetrics(graph, [
+    { verdict: "match", paperHash: root.paperHash },
+    // 不成立の再現は再現率に数えない。試行としては残る。
+    { verdict: "mismatch", paperHash: child.paperHash },
+    // 台帳外の論文への再現も数えない。
+    { verdict: "match", paperHash: hash("9") },
+  ]);
+  assert.equal(measured.reproducedPapers, 1);
+  assert.equal(measured.reproducedRate, 33.3);
+  assert.equal(measured.reproductionAttempts, 3);
+});
+
+test("a citation that only points outward still counts the citing paper as connected", () => {
+  const root = commitment("ag-a", "dataset");
+  const child = commitment("ag-b", "empirical", [{ kind: "depends-on", paperHash: root.paperHash }]);
+  const metrics = networkMetrics(buildGraph([root, child]), []);
+  assert.equal(metrics.isolated, 0);
 });
 
 test("the projection is deterministic and escapes untrusted ledger text", async () => {

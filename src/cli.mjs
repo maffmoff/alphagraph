@@ -27,7 +27,7 @@ Usage:
   alphagraph demo-data [--output FILE] [--bars NUMBER]
   alphagraph fetch-binance --symbol SYMBOL --interval INTERVAL --start ISO --end ISO [--output FILE]
   alphagraph backtest --proposal FILE --data CSV [--output FILE]
-  alphagraph reproduce --report FILE --data CSV [--output FILE]
+  alphagraph reproduce --report FILE --data CSV [--output FILE] [--identity PEM] [--paper HASH] [--ledger DIR]
   alphagraph seal --paper FILE --identity PEM [--ledger DIR] [--output FILE] [--commitment FILE]
   alphagraph ledger-verify [--ledger DIR]
   alphagraph citations [--ledger DIR]
@@ -194,8 +194,30 @@ async function reproduce(args) {
   };
   const output = resolve(args.output ?? defaultOutput("reproductions", strategy.id, comparison.candidate.canonicalHash));
   await writeJson(output, record);
+  // 再現は台帳に積まれて初めてネットワークの計器に乗る（docs/fable-concept.md §7）。
+  // --identity があれば REPRODUCTION_RECORDED を追記する。--paper で対象論文に結び付ける。
+  let ledgerEvent = null;
+  if (args.identity) {
+    const identity = await loadIdentity(args.identity, identityPassphrase(args));
+    const appended = await appendEvent(resolve(args.ledger ?? "ledger"), {
+      type: "REPRODUCTION_RECORDED",
+      data: {
+        grade: 1,
+        paperHash: args.paper ?? null,
+        subject: comparison.subject,
+        verdict: comparison.verdict,
+        contractHash: REPRO_CONTRACT_HASH,
+        author: comparison.author,
+        candidate: comparison.candidate,
+        reproducerDid: identity.did,
+      },
+      privateKey: identity.privateKey,
+    });
+    ledgerEvent = appended.path;
+  }
   if (!comparison.reproduced) process.exitCode = 1;
   return {
+    ledgerEvent,
     message: comparison.reproduced
       ? "Grade-1 reproduction succeeded. Sign it with: alphagraph attest --verdict reproduced"
       : `Grade-1 reproduction failed (${comparison.verdict}).`,

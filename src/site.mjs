@@ -165,6 +165,7 @@ svg text{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;fill:var(--fg)}
 .legend b{color:var(--fg)}.legend .sign{font-family:ui-monospace,monospace}
 .swatch{display:inline-block;width:22px;height:0;border-top-width:2px;border-top-style:inherit;vertical-align:middle;margin-right:8px}
 .sealed{color:var(--muted)}.empty{color:var(--muted)}
+.metrics{margin-bottom:20px}.metrics b{color:var(--muted)}
 footer{margin-top:40px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:14px}
 a{color:inherit}
 `;
@@ -178,12 +179,37 @@ function page(title, body) {
 `;
 }
 
+// フライホイールが回っているかの計器（docs/fable-concept.md §7）。
+// 論文の本数（N）は指標にしない——孤立した論文は何本増えてもネットワークではない。
+// 見るのは「引用で繋がっているか」と「再現されたか」の2つだけ。
+export function networkMetrics(graph, reproductions) {
+  const inLedger = new Set(graph.map((node) => node.paperHash));
+  const connected = graph.filter((node) => (
+    node.cites.some((citation) => inLedger.has(citation.paperHash)) || node.citedBy.length > 0
+  ));
+  const reproduced = new Set(
+    reproductions.filter((entry) => entry.verdict === "match" && entry.paperHash).map((entry) => entry.paperHash),
+  );
+  const rate = (count) => (graph.length ? Math.round((count / graph.length) * 1000) / 10 : 0);
+  return {
+    papers: graph.length,
+    connected: connected.length,
+    connectedRate: rate(connected.length),
+    isolated: graph.length - connected.length,
+    reproducedPapers: [...reproduced].filter((hash) => inLedger.has(hash)).length,
+    reproducedRate: rate([...reproduced].filter((hash) => inLedger.has(hash)).length),
+    reproductionAttempts: reproductions.length,
+  };
+}
+
 export async function buildSite(ledgerDirectory, outputDirectory) {
   const events = await readLedger(ledgerDirectory);
   const chain = verifyChain(events);
   const sealed = events.filter((event) => event.type === "PAPER_SEALED");
   const sealedAt = new Map(sealed.map((event) => [event.data.paperHash, { at: event.at, seq: event.seq }]));
   const graph = buildGraph(sealed.map((event) => event.data));
+  const reproductions = events.filter((event) => event.type === "REPRODUCTION_RECORDED").map((event) => event.data);
+  const metrics = networkMetrics(graph, reproductions);
 
   const rows = graph.map((node) => {
     const meta = sealedAt.get(node.paperHash);
@@ -212,6 +238,14 @@ export async function buildSite(ledgerDirectory, outputDirectory) {
     + `<div><b>head</b><code>${escapeHtml(shortHash(chain.headHash))}</code></div>`
     + `<div><b>論文</b>${graph.length}</div>`
     + "</div>"
+    + "<div class=\"chain metrics\">"
+    + `<div><b>連結率</b>${metrics.connectedRate}% <span class="sealed">(${metrics.connected}/${metrics.papers})</span></div>`
+    + `<div><b>孤立</b>${metrics.isolated}</div>`
+    + `<div><b>再現率</b>${metrics.reproducedRate}% <span class="sealed">(${metrics.reproducedPapers}/${metrics.papers})</span></div>`
+    + `<div><b>再現の試行</b>${metrics.reproductionAttempts}</div>`
+    + "</div>"
+    + "<p class=\"lede\">論文の本数は指標にしません。孤立した論文は何本増えてもネットワークにならないので、"
+    + "見るのは<b>引用で繋がっているか</b>と<b>再現されたか</b>の2つだけです。</p>"
     + "<h2>引用グラフ</h2>"
     + renderGraph(graph)
     + renderLegend()
@@ -229,6 +263,7 @@ export async function buildSite(ledgerDirectory, outputDirectory) {
   return {
     outputPath,
     papers: graph.length,
+    metrics,
     events: chain.events,
     chainValid: chain.valid,
     headHash: chain.headHash,
