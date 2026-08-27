@@ -82,8 +82,43 @@ export function parseIpAllowList(value) {
   });
 }
 
+// 方式Aの発見用: primary の warehouse ID・region・provider はここから拾う。
+export async function listServices(client, fetchImpl = fetch) {
+  const organizationId = await resolveOrganizationId(client, fetchImpl);
+  const services = await api(client, "GET", `/v1/organizations/${organizationId}/services`, undefined, fetchImpl);
+  return (Array.isArray(services) ? services : []).map((service) => ({
+    id: service.id,
+    name: service.name,
+    state: service.state,
+    provider: service.provider,
+    region: service.region,
+    dataWarehouseId: service.dataWarehouseId ?? null,
+    isPrimary: service.isPrimary ?? null,
+    isReadonly: service.isReadonly ?? false,
+    idleScaling: service.idleScaling ?? null,
+    idleTimeoutMinutes: service.idleTimeoutMinutes ?? null,
+  }));
+}
+
+// 書き込み用RW secondaryはWarehouse内の他サービスのmergeを肩代わりしてidleしないことがある
+// （公式docs実測）。idle任せにせず、ロード後は明示 stop でコストを決定的に止める。
+export async function setServiceState(client, serviceId, command, fetchImpl = fetch) {
+  const organizationId = await resolveOrganizationId(client, fetchImpl);
+  assertString(serviceId, "serviceId", { max: 60, pattern: /^[0-9a-f-]+$/ });
+  assertString(command, "command", { max: 10, pattern: /^(start|stop|awake)$/ });
+  const service = await api(
+    client,
+    "PATCH",
+    `/v1/organizations/${organizationId}/services/${serviceId}/state`,
+    { command },
+    fetchImpl,
+  );
+  return { id: service?.id ?? serviceId, state: service?.state ?? null };
+}
+
 // 小構成・idle停止つきの専用サービスを新設する。warehouseId を渡すと既存Warehouseの
-// read-only secondary（compute-compute separation、設計の方式A）として立てる。
+// secondary（compute-compute separation、設計の方式A）として立てる。既定は read-only
+// （遅延なくidleする）。書き込み用ロードサービスだけ writable で作り、使い終わったら stop。
 export async function provisionTenantService(client, options, fetchImpl = fetch) {
   const organizationId = await resolveOrganizationId(client, fetchImpl);
   const name = assertString(options.name ?? "alphagraph-tenant", "service name", { max: 50, pattern: /^[A-Za-z0-9 _-]+$/ });
@@ -105,9 +140,12 @@ export async function provisionTenantService(client, options, fetchImpl = fetch)
     idleScaling: true,
     idleTimeoutMinutes,
     ...(options.warehouseId
-      ? { dataWarehouseId: assertString(options.warehouseId, "warehouseId", { max: 60 }), isReadonly: true }
+      ? { dataWarehouseId: assertString(options.warehouseId, "warehouseId", { max: 60 }), isReadonly: options.writable !== true }
       : {}),
   };
+  if (options.writable === true && !options.warehouseId) {
+    throw new Error("writable is only meaningful for a warehouse secondary; a standalone service is read-write by nature.");
+  }
   const result = await api(client, "POST", `/v1/organizations/${organizationId}/services`, request, fetchImpl);
   const service = result?.service;
   if (!service?.id || typeof result?.password !== "string") {

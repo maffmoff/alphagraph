@@ -51,6 +51,10 @@ fable-concept §6「データ=二レーン」の**計算持ち込みレーンの
 - [ ] 外部テーブル関数（`url()`/`s3()`/`remote()`）+ INTROSPECTION のREVOKE（QUOTA外のデータ持ち出し経路）
 - [ ] **compute分離**: 本体運用（bot-2509本番）と外部負荷を同居させない。専用serviceを新設（Warehouse or 別インスタンス）。旧secondaryの轍: **接続先変数の用途分離をIaCレベルで明示**し、idle停止の発動をコストアラートで監視
 - [ ] 月額予算上限＋per-DID異常検知→自動suspend
+- [ ] **primary サービスの network allowlist が閉じていること**（方式Aの帰結。ユーザー/権限は
+  Warehouse内の全サービスで共有される＝テナントの資格情報は primary のエンドポイントでも
+  認証が通る。RBAC/QUOTAは継承されるが、primary の計算資源を燃やす経路はネットワーク層で
+  塞ぐしかない——公式 warehouses docs の network access control が該当機構）
 - [ ] 利用規約・SLA（bot-2509のドラフトを流用可）と、規制確認（既存の人間承認事項に追加）
 - [ ] 段階ロールアウト: 自分のDID→招待制α→一般
 
@@ -101,16 +105,36 @@ api.clickhouse.cloud を叩く。環境変数は `ALPHAGRAPH_TENANT_CLOUD_KEY_ID
 `idleScaling: true`・`idleTimeoutMinutes`（既定15分）で作成した上で、**応答の実効値で
 idleScaling が有効になったことを検証**する（#3812 は「頼んだ」と「付いた」の乖離に誰も
 気付かなかった事故）。ingressは `--ip` で明示必須（全開は `anywhere` と書いた時だけ）。
-`--warehouse-id` を渡すと既存Warehouseの read-only secondary（方式A）として立つ。
-管理パスワードは一度しか返らないため stdout に出さず mode 600 のファイルにのみ書く。
-`tenant-cost` は usageCost API の日次コスト（CHC建て）を集計する監視線で、cron 候補。
+`--warehouse-id` を渡すと既存Warehouseの secondary（方式A）として立つ（既定 read-only、
+`--writable` でRW）。管理パスワードは一度しか返らないため stdout に出さず mode 600 の
+ファイルにのみ書く。`tenant-cost` は usageCost API の日次コスト（CHC建て）を集計する
+監視線で、cron 候補。`tenant-services` が primary の warehouse ID / region / provider の
+発見、`tenant-service-state` が start/stop（ロード用RWサービスの明示停止）。
 
-**自分のDIDで一周（runbook）**:
+**方式Aレイアウト（2026-08-27 決定・公式 warehouses docs で裏取り済み）**:
 
-1. （人間）テナント用organizationのOpenAPI keyをコンソールで発行し
-   `ALPHAGRAPH_TENANT_CLOUD_KEY_ID/_KEY_SECRET` を設定、課金通知しきい値を設定
-   → `alphagraph tenant-provision --provider ... --region ... --ip <自分のIP>/32 --confirm CREATE`
-   → 出力された credential ファイルから `ALPHAGRAPH_TENANT_ADMIN_*` を設定
+- **テナント向け = read-only secondary**。RO サービスは遅延なく idle し、ユーザー管理
+  （CREATE/DROP USER）もRO上で可能なので、`ALPHAGRAPH_TENANT_ADMIN_URL` はこの secondary を
+  指せばよい（grant/revoke/usage が完結。bot-2509 primary を指す必要はない）
+- **派生データのロード（CREATE TABLE / INSERT）だけは書き込みが要る**。選択肢は
+  (a) `--writable` の RW secondary をもう一つ立て、ロード後に `tenant-service-state --command stop`
+  で明示停止（RW は他サービスの merge 肩代わりで idle しないことがある＝#3812型の罠。
+  idle任せにしない）、(b) bot-2509 側の既存ETLに任せる。Phase 1 は (a)
+- **ユーザー共有の裏返し**（§5 最終チェック項目）: テナント資格情報は primary エンドポイント
+  でも通るため、primary の network allowlist 確認が着工前提
+
+**自分のDIDで一周（runbook・方式A版）**:
+
+1. （人間）primary の属する organization で専用 OpenAPI key をコンソールで発行し
+   `ALPHAGRAPH_TENANT_CLOUD_KEY_ID/_KEY_SECRET` を設定、課金通知しきい値を設定。
+   primary の network allowlist が閉じていることを確認（§5 最終項目）
+   → `tenant-services` で primary の `dataWarehouseId` / provider / region を確認
+   → `tenant-provision --warehouse-id <ID> --provider <同> --region <同> --ip <自分のIP>/32 --confirm CREATE`
+     （テナント向け read-only secondary）
+   → `tenant-provision --warehouse-id <ID> ... --writable --name alphagraph-loader --confirm CREATE`
+     （ロード用RW。手順2-3が終わったら `tenant-service-state --command stop` で明示停止）
+   → 手順2-3 は RW の credential から、手順4以降は RO の credential から
+     `ALPHAGRAPH_TENANT_ADMIN_*` を設定
 2. `alphagraph tenant-init --execute` — 土台DDL（DB・派生テーブル・ロール・PROFILE・QUOTA・ROW POLICY）
 3. `alphagraph tenant-load-hl --coin BTC --start ... --end ... --execute` — 生データ公開レーンから
    HL日次スナップショットを取得し搭載。来歴は `dataset_provenance` にも入り csv_sha256 で突き合う

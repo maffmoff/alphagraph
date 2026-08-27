@@ -4,9 +4,11 @@ import { readFile } from "node:fs/promises";
 import {
   CLOUD_API_ROOT,
   fetchUsageCost,
+  listServices,
   parseIpAllowList,
   provisionTenantService,
   resolveOrganizationId,
+  setServiceState,
   tenantCloudFromEnv,
 } from "../src/tenant-cloud.mjs";
 
@@ -119,6 +121,49 @@ test("provisioning validates inputs before any request leaves", async () => {
   await assert.rejects(provisionTenantService(client, { provider: "digitalocean", region: "x", ipAccessList: [{ source: "1.1.1.1" }] }, spy), /invalid format|at most/);
   await assert.rejects(provisionTenantService(client, { provider: "aws", region: "ap-northeast-1", ipAccessList: [] }, spy), /explicit ipAccessList/);
   assert.equal(called, 0);
+});
+
+test("a warehouse secondary defaults to read-only; --writable flips it; standalone rejects writable", async () => {
+  let sent;
+  const fetchImpl = async (url, init) => {
+    sent = JSON.parse(init.body);
+    return jsonResponse({ service: { id: "svc-3", idleScaling: true, endpoints: [{ protocol: "https", host: "h", port: 8443 }] }, password: "p" });
+  };
+  await provisionTenantService(client, {
+    provider: "aws", region: "ap-northeast-1", warehouseId: "wh-1", writable: true,
+    ipAccessList: parseIpAllowList("203.0.113.7/32"),
+  }, fetchImpl);
+  assert.equal(sent.isReadonly, false);
+  await assert.rejects(
+    provisionTenantService(client, { provider: "aws", region: "ap-northeast-1", writable: true, ipAccessList: parseIpAllowList("anywhere") }, fetchImpl),
+    /standalone service is read-write by nature/,
+  );
+});
+
+test("service listing surfaces the fields the 方式A runbook needs", async () => {
+  const fetchImpl = async () => jsonResponse([
+    { id: "p-1", name: "primary", state: "running", provider: "aws", region: "ap-northeast-1", dataWarehouseId: "wh-1", isPrimary: true, idleScaling: false, idleTimeoutMinutes: null, extra: "dropped" },
+  ]);
+  const services = await listServices(client, fetchImpl);
+  assert.deepEqual(services, [{
+    id: "p-1", name: "primary", state: "running", provider: "aws", region: "ap-northeast-1",
+    dataWarehouseId: "wh-1", isPrimary: true, isReadonly: false, idleScaling: false, idleTimeoutMinutes: null,
+  }]);
+});
+
+test("state changes validate the command and target", async () => {
+  let seen;
+  const fetchImpl = async (url, init) => {
+    seen = { url: String(url), method: init.method, body: JSON.parse(init.body) };
+    return jsonResponse({ id: "svc-1", state: "stopping" });
+  };
+  const result = await setServiceState(client, "aaaaaaaa-1111-2222-3333-444444444444", "stop", fetchImpl);
+  assert.equal(seen.url, "https://api.clickhouse.cloud/v1/organizations/org-1/services/aaaaaaaa-1111-2222-3333-444444444444/state");
+  assert.equal(seen.method, "PATCH");
+  assert.deepEqual(seen.body, { command: "stop" });
+  assert.equal(result.state, "stopping");
+  await assert.rejects(setServiceState(client, "aaaaaaaa-1111-2222-3333-444444444444", "destroy", fetchImpl), /invalid format/);
+  await assert.rejects(setServiceState(client, "../../etc", "stop", fetchImpl), /invalid format/);
 });
 
 test("usage cost aggregates per-service records and keeps the grand total", async () => {

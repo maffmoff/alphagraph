@@ -41,8 +41,10 @@ import {
 } from "./tenant-admin.mjs";
 import {
   fetchUsageCost,
+  listServices,
   parseIpAllowList,
   provisionTenantService,
+  setServiceState,
   tenantCloudFromEnv,
 } from "./tenant-cloud.mjs";
 
@@ -62,13 +64,15 @@ Usage:
   alphagraph eval-intake --room ROOM --identity PEM [--ledger DIR] [--state FILE]
   alphagraph hl-universe [--output FILE]
   alphagraph fetch-hl --coin COIN --interval INTERVAL --start ISO --end ISO [--output FILE]
-  alphagraph tenant-provision --provider aws|gcp|azure --region REGION --ip CIDRS|anywhere --confirm CREATE [--name NAME] [--warehouse-id ID] [--idle-minutes N] [--memory-gb N]
+  alphagraph tenant-services
+  alphagraph tenant-provision --provider aws|gcp|azure --region REGION --ip CIDRS|anywhere --confirm CREATE [--name NAME] [--warehouse-id ID] [--writable] [--idle-minutes N] [--memory-gb N]
+  alphagraph tenant-service-state --service-id ID --command start|stop|awake
   alphagraph tenant-cost [--days N]
   alphagraph tenant-init [--output FILE] [--execute]
   alphagraph tenant-grant --did DID --identity PEM [--days N] [--ledger DIR] [--execute]
   alphagraph tenant-revoke --did DID --identity PEM [--reason TEXT] [--ledger DIR] [--execute]
   alphagraph tenant-load-hl --coin COIN --start ISO --end ISO [--execute]
-  alphagraph tenant-usage --identity PEM [--date YYYY-MM-DD] [--ledger DIR]
+  alphagraph tenant-usage --identity PEM [--date YYYY-MM-DD] [--ledger DIR] [--url URL]
   alphagraph tenant-verify --credentials FILE [--url URL] [--output FILE]
   alphagraph attest --artifact FILE --identity PEM --role ROLE --verdict VERDICT --statement TEXT [options]
   alphagraph verify --artifact FILE --attestation FILE
@@ -105,7 +109,7 @@ Safety:
 `;
 
 // 値を取らない真偽フラグ。ここに無い --key は値を要求する。
-const BOOLEAN_FLAGS = new Set(["early", "execute"]);
+const BOOLEAN_FLAGS = new Set(["early", "execute", "writable"]);
 
 function parseArgs(argv) {
   const result = { _: [] };
@@ -492,6 +496,23 @@ async function writeSecretFile(path, text) {
   await writeFile(path, text, { encoding: "utf8", mode: 0o600 });
 }
 
+// 方式Aの発見: primary サービスの warehouse ID・provider・region をAPIで確認する。
+async function tenantServices() {
+  const services = await listServices(tenantCloudFromEnv());
+  return {
+    message: "Services visible to the tenant organization key. Use the primary's dataWarehouseId with tenant-provision --warehouse-id.",
+    services,
+  };
+}
+
+// RW secondary は他サービスの merge 肩代わりで idle しないことがある（warehouses docs）。
+// ロード用サービスは使い終わったら stop でコストを決定的に止める。
+async function tenantServiceState(args) {
+  if (!args["service-id"] || !args.command) throw new Error("tenant-service-state requires --service-id ID and --command start|stop|awake.");
+  const result = await setServiceState(tenantCloudFromEnv(), args["service-id"], args.command);
+  return { message: `Service state command '${args.command}' accepted.`, ...result };
+}
+
 // 専用サービスの新設をコンソール手作業からAPIに置き換える（docs/data-tenancy.md §7-1）。
 // 費用が発生する行為なので publish と同じ作法で --confirm CREATE を要求する。
 async function tenantProvision(args) {
@@ -510,6 +531,7 @@ async function tenantProvision(args) {
     memoryGb: args["memory-gb"] ? Number(args["memory-gb"]) : undefined,
     idleTimeoutMinutes: args["idle-minutes"] ? Number(args["idle-minutes"]) : undefined,
     warehouseId: args["warehouse-id"],
+    writable: "writable" in args,
   });
   // 管理パスワードは一度しか返らない。stdout（会話ログ）に出さず、mode 600 のファイルだけに書く。
   const credentialPath = resolve("artifacts", "tenant", "service-admin.credential.json");
@@ -711,7 +733,12 @@ async function tenantUsage(args) {
   if (!args.identity) throw new Error("tenant-usage requires --identity PEM.");
   const identity = await loadIdentity(args.identity, identityPassphrase(args));
   const date = args.date ?? new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  const connection = tenantAdminFromEnv();
+  // 方式Aでは system.query_log はサービスごと。テナントが接続する read-only secondary の
+  // エンドポイントを --url で指す（ユーザーはWarehouse内で共有なので資格情報は同じ）。
+  const admin = tenantAdminFromEnv();
+  const connection = args.url
+    ? createTenantConnection({ url: args.url, username: admin.username, password: admin.password })
+    : admin;
   const rows = await queryJson(connection, buildUsageQuery(date));
   const data = buildUsageData({ date, rows, endpointHost: connection.host });
   const { event, path } = await appendEvent(resolve(args.ledger ?? "ledger"), {
@@ -901,6 +928,8 @@ export async function runCli(argv) {
   if (command === "eval-intake") return evalIntake(args);
   if (command === "hl-universe") return hlUniverse(args);
   if (command === "fetch-hl") return fetchHl(args);
+  if (command === "tenant-services") return tenantServices(args);
+  if (command === "tenant-service-state") return tenantServiceState(args);
   if (command === "tenant-provision") return tenantProvision(args);
   if (command === "tenant-cost") return tenantCost(args);
   if (command === "tenant-init") return tenantInit(args);
