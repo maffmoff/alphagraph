@@ -17,6 +17,7 @@ import { hashJson, readJson, writeJson } from "./core.mjs";
 import { REPRO_CONTRACT_HASH, compareReports, reproHashes } from "./repro.mjs";
 import { citationLedger, sealPaper } from "./paper.mjs";
 import { appendEvent, readLedger, verifyChain } from "./ledger.mjs";
+import { buildSite } from "./site.mjs";
 import { fetchHyperliquidCandles, fetchHyperliquidUniverse } from "./data-source.mjs";
 
 const HELP = `AlphaGraph — Proof of Useful Strategy
@@ -30,6 +31,7 @@ Usage:
   alphagraph seal --paper FILE --identity PEM [--ledger DIR] [--output FILE] [--commitment FILE]
   alphagraph ledger-verify [--ledger DIR]
   alphagraph citations [--ledger DIR]
+  alphagraph site [--ledger DIR] [--output DIR]
   alphagraph hl-universe [--output FILE]
   alphagraph fetch-hl --coin COIN --interval INTERVAL --start ISO --end ISO [--output FILE]
   alphagraph attest --artifact FILE --identity PEM --role ROLE --verdict VERDICT --statement TEXT [options]
@@ -267,6 +269,11 @@ async function citations(args) {
   };
 }
 
+async function site(args) {
+  const result = await buildSite(resolve(args.ledger ?? "ledger"), resolve(args.output ?? "site"));
+  return { message: "Ledger projected to a deterministic static page. Re-generating from the same ledger yields the same hash.", ...result };
+}
+
 async function hlUniverse(args) {
   const result = await fetchHyperliquidUniverse();
   const output = resolve(args.output ?? "data/hl-universe.json");
@@ -425,6 +432,7 @@ export async function runCli(argv) {
   if (command === "seal") return seal(args);
   if (command === "ledger-verify") return ledgerVerify(args);
   if (command === "citations") return citations(args);
+  if (command === "site") return site(args);
   if (command === "hl-universe") return hlUniverse(args);
   if (command === "fetch-hl") return fetchHl(args);
   if (command === "attest") return attest(args);
