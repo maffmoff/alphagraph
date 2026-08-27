@@ -18,6 +18,7 @@ import { REPRO_CONTRACT_HASH, compareReports, reproHashes } from "./repro.mjs";
 import { citationLedger, sealPaper, verifyReveal } from "./paper.mjs";
 import { appendEvent, readLedger, verifyChain } from "./ledger.mjs";
 import { buildSite } from "./site.mjs";
+import { fetchRoomSince, selectNewEvaluations } from "./eval-intake.mjs";
 import { fetchHyperliquidCandles, fetchHyperliquidUniverse } from "./data-source.mjs";
 
 const HELP = `AlphaGraph — Proof of Useful Strategy
@@ -33,6 +34,7 @@ Usage:
   alphagraph ledger-verify [--ledger DIR]
   alphagraph citations [--ledger DIR]
   alphagraph site [--ledger DIR] [--output DIR]
+  alphagraph eval-intake --room ROOM --identity PEM [--ledger DIR] [--state FILE]
   alphagraph hl-universe [--output FILE]
   alphagraph fetch-hl --coin COIN --interval INTERVAL --start ISO --end ISO [--output FILE]
   alphagraph attest --artifact FILE --identity PEM --role ROLE --verdict VERDICT --statement TEXT [options]
@@ -365,6 +367,40 @@ async function site(args) {
   return { message: "Ledger projected to a deterministic static page. Re-generating from the same ledger yields the same hash.", ...result };
 }
 
+// Technocore の署名付き反応を EVALUATION_SIGNED として台帳に積む（src/eval-intake.mjs）。
+async function evalIntake(args) {
+  if (!args.room || !args.identity) throw new Error("eval-intake requires --room ROOM and --identity PEM.");
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const statePath = resolve(args.state ?? "artifacts/eval-intake-state.json");
+  let state = { rooms: {} };
+  try { state = await readJson(statePath); } catch { /* 初回 */ }
+  const sinceSeq = state.rooms?.[args.room] ?? 0;
+
+  const { lastSeq, messages } = await fetchRoomSince(args.room, sinceSeq);
+  const ledgerEvents = await readLedger(ledgerDir);
+  const fresh = selectNewEvaluations(ledgerEvents, messages);
+  const appended = [];
+  for (const evaluation of fresh) {
+    const { event } = await appendEvent(ledgerDir, {
+      type: "EVALUATION_SIGNED",
+      data: evaluation,
+      privateKey: identity.privateKey,
+    });
+    appended.push({ seq: event.seq, paperHash: evaluation.paperHash.slice(0, 12), verdict: evaluation.verdict, from: evaluation.evaluatorDid.slice(0, 24) });
+  }
+  state.rooms = { ...state.rooms, [args.room]: lastSeq };
+  await writeJson(statePath, state);
+  return {
+    message: appended.length
+      ? "Signed reactions recorded as EVALUATION_SIGNED. They are server-attested, not independently verifiable (fable-concept §6)."
+      : "No new signed evaluations in this room.",
+    room: args.room,
+    scannedUpTo: lastSeq,
+    recorded: appended,
+  };
+}
+
 async function hlUniverse(args) {
   const result = await fetchHyperliquidUniverse();
   const output = resolve(args.output ?? "data/hl-universe.json");
@@ -525,6 +561,7 @@ export async function runCli(argv) {
   if (command === "ledger-verify") return ledgerVerify(args);
   if (command === "citations") return citations(args);
   if (command === "site") return site(args);
+  if (command === "eval-intake") return evalIntake(args);
   if (command === "hl-universe") return hlUniverse(args);
   if (command === "fetch-hl") return fetchHl(args);
   if (command === "attest") return attest(args);

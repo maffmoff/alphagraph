@@ -1,0 +1,21 @@
+{
+  "schema": "alphagraph-ledger-event-v1",
+  "seq": 11,
+  "at": "2026-08-27T07:23:30.331Z",
+  "type": "EVALUATION_SIGNED",
+  "data": {
+    "paperHash": "28c026c0e76b06ace71e9e0bda232c6487daeb729a21c5fb9bbc5a26129acc9d",
+    "verdict": "comment",
+    "statement": "self-test of the evaluation intake path",
+    "evaluatorDid": "did:key:z6MkrHpTidvhcgLJ6UVbNFinjEDKLjoeeoKudqvMBg5x1iaj",
+    "room": "general",
+    "seq": 1025,
+    "at": "2026-08-27T07:23:29.508628Z",
+    "attestation": "server-attested"
+  },
+  "prevHash": "b07aac38156e8335c975ea994190622749015f64b78979ea91511e2ad6436ed7",
+  "authorDid": "did:key:z6MkrHpTidvhcgLJ6UVbNFinjEDKLjoeeoKudqvMBg5x1iaj",
+  "canonical": "alphagraph-ledger-v1|11|2026-08-27T07:23:30.331Z|EVALUATION_SIGNED|887db70a716418f4f0df739c3bcbfc8e56e1ba3208b45f458c028e24afb5dc48|b07aac38156e8335c975ea994190622749015f64b78979ea91511e2ad6436ed7",
+  "signature": "hIh-pz5PH2qHAIsylaWlM9p2n9D5-qk5HuwTIV1EXF5Yvvaeb2ps9QFSWd8m5gKS7rbXF13BCpZxSjC262FDDA",
+  "hash": "66328e11021c15427ba39fd86b63023196a2b15249a7b62f343cd2b83266e002"
+}

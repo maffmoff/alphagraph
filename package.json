@@ -9,7 +9,7 @@
     "alphagraph": "./bin/alphagraph.mjs"
   },
   "scripts": {
-    "check": "node --check bin/alphagraph.mjs && node --check src/cli.mjs && node --check src/core.mjs && node --check src/backtest.mjs && node --check src/did.mjs && node --check src/dashboard.mjs && node --check src/market-data.mjs && node --check src/bt-agent.mjs && node --check src/ls-eval.mjs && node --check src/repro.mjs && node --check src/paper.mjs && node --check src/ledger.mjs && node --check src/data-source.mjs && node --check src/site.mjs && node --check tools/flop-watch.mjs",
+    "check": "node --check bin/alphagraph.mjs && node --check src/cli.mjs && node --check src/core.mjs && node --check src/backtest.mjs && node --check src/did.mjs && node --check src/dashboard.mjs && node --check src/market-data.mjs && node --check src/bt-agent.mjs && node --check src/ls-eval.mjs && node --check src/repro.mjs && node --check src/paper.mjs && node --check src/ledger.mjs && node --check src/data-source.mjs && node --check src/site.mjs && node --check src/eval-intake.mjs && node --check tools/flop-watch.mjs",
     "test": "node --test",
     "demo": "node bin/alphagraph.mjs demo"
   },
