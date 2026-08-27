@@ -14,7 +14,7 @@ import {
   verifyAttestation,
 } from "./did.mjs";
 import { hashJson, readJson, writeJson } from "./core.mjs";
-import { REPRO_CONTRACT_HASH, compareReports, reproHashes } from "./repro.mjs";
+import { REPRO_CONTRACT, REPRO_CONTRACT_HASH, compareReports, reproHashes } from "./repro.mjs";
 import { citationLedger, sealPaper, verifyReveal } from "./paper.mjs";
 import {
   INTAKE_CONTRACT,
@@ -41,6 +41,7 @@ Usage:
   alphagraph intake --request FILE --identity PEM [--ledger DIR]
   alphagraph seal --paper FILE --identity PEM [--ledger DIR] [--output FILE] [--commitment FILE]
   alphagraph reveal --paper FILE --identity PEM [--ledger DIR] [--output DIR] [--early]
+  alphagraph contract-changed --identity PEM [--ledger DIR]
   alphagraph ledger-verify [--ledger DIR]
   alphagraph citations [--ledger DIR]
   alphagraph site [--ledger DIR] [--output DIR]
@@ -209,7 +210,9 @@ async function reproduce(args) {
   const record = {
     schema: "alphagraph-reproduction-v1",
     grade: 1,
-    contract: { schema: "alphagraph-repro-contract-v1", hash: REPRO_CONTRACT_HASH },
+    contract: { schema: REPRO_CONTRACT.schema, hash: REPRO_CONTRACT_HASH },
+    // 著者レポートが別版の契約で作られていた場合の切り分け材料。判定は常に現行契約で行う。
+    authorContractHash: authorReport.reproduction?.contractHash ?? null,
     ...comparison,
   };
   const output = resolve(args.output ?? defaultOutput("reproductions", strategy.id, comparison.candidate.canonicalHash));
@@ -288,6 +291,38 @@ async function intake(args) {
     seq: event.seq,
     ledgerEvent: path,
     contractHash: INTAKE_CONTRACT_HASH,
+  };
+}
+
+// 契約変更の台帳イベント（docs/mvp.md §8）。正規形の定義権は運営に残る残余の中央性なので、
+// 変更そのものを署名付きで台帳に積み、防止でなく検出可能にする。現行コードの REPRO_CONTRACT が
+// 唯一の情報源で、supersedes が旧契約のハッシュを釘付けする。同じ契約ハッシュの二重公告は拒否。
+async function contractChanged(args) {
+  if (!args.identity) throw new Error("contract-changed requires --identity PEM.");
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const events = await readLedger(ledgerDir);
+  const announced = events.find(
+    (event) => event.type === "CONTRACT_CHANGED" && event.data.contractHash === REPRO_CONTRACT_HASH,
+  );
+  if (announced) throw new Error(`This contract is already announced at seq ${announced.seq}.`);
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const { path } = await appendEvent(ledgerDir, {
+    type: "CONTRACT_CHANGED",
+    data: {
+      contract: REPRO_CONTRACT.schema,
+      contractHash: REPRO_CONTRACT_HASH,
+      supersedes: REPRO_CONTRACT.supersedes ?? null,
+      drop: REPRO_CONTRACT.drop,
+      reason: REPRO_CONTRACT.reason,
+    },
+    privateKey: identity.privateKey,
+  });
+  return {
+    message: "Contract change announced. Reproduction verdicts are computed under this contract from now on.",
+    contract: REPRO_CONTRACT.schema,
+    contractHash: REPRO_CONTRACT_HASH,
+    supersedes: REPRO_CONTRACT.supersedes ?? null,
+    ledgerEvent: path,
   };
 }
 
@@ -612,6 +647,7 @@ export async function runCli(argv) {
   if (command === "reproduce") return reproduce(args);
   if (command === "request-seal") return requestSeal(args);
   if (command === "intake") return intake(args);
+  if (command === "contract-changed") return contractChanged(args);
   if (command === "seal") return seal(args);
   if (command === "reveal") return reveal(args);
   if (command === "ledger-verify") return ledgerVerify(args);
