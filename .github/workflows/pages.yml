@@ -1,0 +1,52 @@
+name: pages
+
+# 台帳の静的投影を GitHub Pages で配信する（docs/ledger-design.md 部品4）。
+# ページは台帳から決定的に生成される——生成器はハッシュ固定で公開されており、
+# 誰でも手元で `node bin/alphagraph.mjs site` を実行して配信内容と一致することを検証できる。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm run check
+      - run: npm test
+      - name: Project the ledger
+        run: |
+          node bin/alphagraph.mjs site --ledger ledger --output _pages
+          node -e "console.log(require('fs').readFileSync('_pages/index.html','utf8').length + ' bytes')"
+      - name: Publish revealed papers alongside the projection
+        run: |
+          mkdir -p _pages/papers
+          cp papers/*.json _pages/papers/ 2>/dev/null || true
+          mkdir -p _pages/ledger
+          cp -r ledger/events _pages/ledger/events
+          cp ledger/head.json _pages/ledger/head.json
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _pages
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
