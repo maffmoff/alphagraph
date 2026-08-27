@@ -3,15 +3,23 @@ import { assertPlainObject, hashJson } from "./core.mjs";
 // 等級1再現の決定性契約（docs/mvp.md §8-1）。
 // 同一コード×同一データの再実行が、実行時刻や保存ファイル名に依らず同じハッシュになるための正規形。
 // この定義自体が再現の合否を決めるため、契約はハッシュ固定して公開し、変更は台帳イベントとして扱う。
+// 変更手順: supersedes に旧契約のハッシュを釘付けし、CONTRACT_CHANGED を台帳に積み、
+// test/golden-repro.test.mjs の定数を再固定する。
 export const REPRO_CONTRACT = {
-  schema: "alphagraph-repro-contract-v1",
+  schema: "alphagraph-repro-contract-v2",
   reportSchema: "alphagraph-backtest-v1",
+  supersedes: {
+    schema: "alphagraph-repro-contract-v1",
+    hash: "3edce959b890e880357c27f6d997134e4e248221e3790d271573e1434680209e",
+    change: "data.quality を drop に追加。--provenance 付きの著者レポートが等級1再現で構造的に environment-drift になる欠陥の修正。",
+  },
   drop: [
     "createdAt",
     "proposal",
     "reproduction",
     "data.label",
     "data.provenance",
+    "data.quality",
   ],
   reason: {
     createdAt: "実行時刻。再現者と著者で必ず異なる。",
@@ -19,6 +27,7 @@ export const REPRO_CONTRACT = {
     reproduction: "この契約で計算した値そのもの。自己参照を避けるため対象外。",
     "data.label": "保存ファイル名。再現者は別名で保存する。データ本体はdata.sha256が釘付けする。",
     "data.provenance": "取得元メタデータ。fetchedAtを含む。内容の同一性はdata.sha256が担う。",
+    "data.quality": "provenance由来の品質ゲート要約。--provenanceという実行時の任意入力の有無で正規形が変わってはならず、根拠データの同一性はdata.sha256が担う。",
   },
   rule: "canonicalHash = sha256(stableStringify(正規形))、metricsHash = sha256(stableStringify({strategyHash, dataSha256, metrics, gate}))。",
 };
@@ -32,7 +41,6 @@ export function canonicalizeReport(report) {
   }
   assertPlainObject(report.data, "Report data");
   const data = { sha256: report.data.sha256, bars: report.data.bars, start: report.data.start, end: report.data.end };
-  if (report.data.quality) data.quality = report.data.quality;
   return {
     schema: report.schema,
     engine: report.engine,
