@@ -7,7 +7,15 @@ test("the module cannot read credentials because it never touches the environmen
   const source = await readFile(new URL("../src/data-source.mjs", import.meta.url), "utf8");
   // 方針ではなく構造で守る: 資格情報を読む経路そのものがモジュール内に存在しない。
   // 検査対象はコードだけ（コメントは自身の禁止事項を書くため除去してから見る）。
-  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").split("\n").map((line) => line.replace(/\/\/.*$/, "")).join("\n");
+  // 改行を正規化してから見る。JSの `.` は \r にマッチしないので、CRLFのまま行コメントを
+  // 剥がそうとすると剥がれない（Windowsでの実測）。.gitattributes で変換自体は止めてあるが、
+  // 利用者のgit設定に依存しないよう、ここでも正規化する。
+  const code = source
+    .replace(/\r\n?/g, "\n")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n")
+    .map((line) => line.replace(/\/\/.*$/, ""))
+    .join("\n");
   assert.equal(/process\.env/.test(code), false, "data-source.mjs must never read process.env");
   // 鍵を扱う経路が無いことを見る（CREDENTIAL_PARAMS の否定リストは検査対象ではなく防具）。
   assert.equal(/loadIdentity|privateKey|signText|generateKeyPair/.test(code), false, "data-source.mjs must not handle secrets");
