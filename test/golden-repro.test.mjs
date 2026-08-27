@@ -9,9 +9,13 @@ import { REPRO_CONTRACT_HASH, reproHashes } from "../src/repro.mjs";
 // 同じ値が出ることをCIのマトリクスで常時証明する。浮動小数の差はここで即座に落ちる。
 // この定数が変わってよいのは、engine.version の意図的な更新か、正規形の契約を
 // 変えた時だけ。その場合は台帳イベントとして扱い、定数の再固定を明示的に行う。
+// 再固定履歴:
+// - 2026-08-27 契約v1→v2（data.quality を drop に追加、CONTRACT_CHANGED で公告）。
+//   contractHash のみ変更。quality を持たないこの fixture の正規形は不変なので
+//   canonicalHash と metricsHash は据え置き — 据え置きであること自体が契約変更の影響範囲の証明。
 const GOLDEN = {
   csvSha256: "8c1e578e7ba72c257b01f77bd6e5e053ee4a18772a550fe675c719a6658de3d6",
-  contractHash: "3edce959b890e880357c27f6d997134e4e248221e3790d271573e1434680209e",
+  contractHash: "87cc8009b85464339f7d3275495581ef0bb51dc5208d8f7b8c7dc5f04ee4afbc",
   metricsHash: "c1ca512b245d2c4fac6aae0f7a0a4a3cf3c5cfa04b077e1f116ab7c95dd4c0fb",
   canonicalHash: "92d17c2c3f79428699c08e05140911dae5df47982755386bdd525b9cf59fb846",
   outOfSampleSharpe: 3.974947,
