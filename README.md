@@ -15,6 +15,7 @@
 - [docs/ledger-design.md](docs/ledger-design.md) — 台帳（透明性ログ・commit-reveal・公開スケジュール）
 - [docs/engine-port-plan.md](docs/engine-port-plan.md) — バックテストエンジン移植計画（Rust・golden parity）
 - [docs/ui-data-needs.md](docs/ui-data-needs.md) — UIが必要とするデータ（論文レジストリ）
+- [docs/data-tenancy.md](docs/data-tenancy.md) — ClickHouseテナント復活設計（計算持ち込みレーン）
 - [docs/fable-design-brief-ja.md](docs/fable-design-brief-ja.md) — 初期brief（入力資料）
 - [docs/protocol-ja.md](docs/protocol-ja.md) — プロトコルv0.1（役割と証拠の流れ）
 

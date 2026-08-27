@@ -14,6 +14,9 @@ export const LEDGER_EVENT_TYPES = new Set([
   "EVALUATION_SIGNED",
   "SERIES_REGISTERED",
   "PAYOUT",
+  "TENANT_GRANTED",
+  "TENANT_REVOKED",
+  "USAGE_REPORTED",
 ]);
 
 const GENESIS_PREV_HASH = "0".repeat(64);
