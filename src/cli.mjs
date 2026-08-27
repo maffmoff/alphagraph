@@ -20,6 +20,25 @@ import { appendEvent, readLedger, verifyChain } from "./ledger.mjs";
 import { buildSite } from "./site.mjs";
 import { fetchRoomSince, selectNewEvaluations } from "./eval-intake.mjs";
 import { fetchHyperliquidCandles, fetchHyperliquidUniverse } from "./data-source.mjs";
+import {
+  TENANT_DATABASE,
+  buildBaseDdl,
+  buildTenantRevokeData,
+  buildTenantRevokeDdl,
+  buildUsageData,
+  buildUsageQuery,
+  planTenantGrant,
+  tenantCheckProbes,
+  tenantUsername,
+} from "./tenant.mjs";
+import {
+  createTenantConnection,
+  executeStatements,
+  insertJsonRows,
+  queryJson,
+  runProbe,
+  tenantAdminFromEnv,
+} from "./tenant-admin.mjs";
 
 const HELP = `AlphaGraph — Proof of Useful Strategy
 
@@ -37,6 +56,12 @@ Usage:
   alphagraph eval-intake --room ROOM --identity PEM [--ledger DIR] [--state FILE]
   alphagraph hl-universe [--output FILE]
   alphagraph fetch-hl --coin COIN --interval INTERVAL --start ISO --end ISO [--output FILE]
+  alphagraph tenant-init [--output FILE] [--execute]
+  alphagraph tenant-grant --did DID --identity PEM [--days N] [--ledger DIR] [--execute]
+  alphagraph tenant-revoke --did DID --identity PEM [--reason TEXT] [--ledger DIR] [--execute]
+  alphagraph tenant-load-hl --coin COIN --start ISO --end ISO [--execute]
+  alphagraph tenant-usage --identity PEM [--date YYYY-MM-DD] [--ledger DIR]
+  alphagraph tenant-verify --credentials FILE [--url URL] [--output FILE]
   alphagraph attest --artifact FILE --identity PEM --role ROLE --verdict VERDICT --statement TEXT [options]
   alphagraph verify --artifact FILE --attestation FILE
   alphagraph dashboard [--reports DIR] [--output FILE]
@@ -56,13 +81,19 @@ Passphrase fallback:
   If --keychain-service is omitted, set ALPHAGRAPH_PASSPHRASE in the environment.
   (TRADECORE_PASSPHRASE is still accepted for existing keys.)
 
+Tenant lane (docs/data-tenancy.md):
+  --execute talks to the dedicated tenant warehouse configured ONLY by
+  ALPHAGRAPH_TENANT_ADMIN_URL / _USER / _PASSWORD. Never point those at the
+  bot-2509 primary. Credential files written by tenant-grant stay local;
+  the public ledger records the grant but never a secret.
+
 Safety:
   Backtests and the dashboard are research artifacts, not trading instructions.
   Technocore is written only by the publish command with --confirm PUBLISH.
 `;
 
 // 値を取らない真偽フラグ。ここに無い --key は値を要求する。
-const BOOLEAN_FLAGS = new Set(["early"]);
+const BOOLEAN_FLAGS = new Set(["early", "execute"]);
 
 function parseArgs(argv) {
   const result = { _: [] };
@@ -432,6 +463,233 @@ async function fetchHl(args) {
   };
 }
 
+// ---- 計算持ち込みレーン Phase 1（docs/data-tenancy.md §6）----
+
+// 台帳上のテナント状態: 同じユーザー名の GRANTED/REVOKED を時系列で畳む。
+function latestTenantGrant(events, username) {
+  let active = null;
+  for (const event of events) {
+    if (event.type === "TENANT_GRANTED" && event.data.username === username) active = event;
+    if (event.type === "TENANT_REVOKED" && event.data.username === username) active = null;
+  }
+  return active;
+}
+
+async function writeSecretFile(path, text) {
+  await mkdir(resolve(path, ".."), { recursive: true });
+  await writeFile(path, text, { encoding: "utf8", mode: 0o600 });
+}
+
+async function tenantInit(args) {
+  const ddl = buildBaseDdl();
+  const output = resolve(args.output ?? "artifacts/tenant/base.sql");
+  await mkdir(resolve(output, ".."), { recursive: true });
+  await writeFile(output, `${ddl.join(";\n\n")};\n`, "utf8");
+  let executed = null;
+  if ("execute" in args) executed = (await executeStatements(tenantAdminFromEnv(), ddl)).executed;
+  return {
+    message: executed === null
+      ? "Tenant base DDL written. Apply it with --execute once ALPHAGRAPH_TENANT_ADMIN_* points at the dedicated warehouse."
+      : "Tenant base DDL applied to the dedicated warehouse.",
+    output,
+    statements: ddl.length,
+    executed,
+  };
+}
+
+async function tenantGrant(args) {
+  if (!args.did || !args.identity) throw new Error("tenant-grant requires --did DID and --identity PEM.");
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const plan = planTenantGrant({ did: args.did, days: args.days ? Number(args.days) : undefined });
+  const active = latestTenantGrant(await readLedger(ledgerDir), plan.username);
+  if (active && Date.parse(active.data.validUntil) > Date.now()) {
+    throw new Error(
+      `An unexpired grant for ${plan.username} is already on the ledger (seq ${active.seq}, `
+      + `valid until ${active.data.validUntil}). Revoke it before granting again.`,
+    );
+  }
+  // 実行してから記録する: 台帳が「発行された」と言うのにDBにユーザーがいない状態を作らない。
+  let executed = null;
+  let warehouseUrl = null;
+  if ("execute" in args) {
+    const connection = tenantAdminFromEnv();
+    executed = (await executeStatements(connection, plan.ddl)).executed;
+    warehouseUrl = connection.endpoint;
+  }
+  const { event, path } = await appendEvent(ledgerDir, {
+    type: "TENANT_GRANTED",
+    data: plan.ledgerData,
+    privateKey: identity.privateKey,
+  });
+  // DDLはsalt付きハッシュを含むので、credential同様gitの外・所有者のみ読める形で置く。
+  const ddlPath = resolve("artifacts", "tenant", `${plan.username}.grant.sql`);
+  await writeSecretFile(ddlPath, `${plan.ddl.join(";\n\n")};\n`);
+  const credentialPath = resolve("artifacts", "tenant", `${plan.username}.credential.json`);
+  await writeSecretFile(credentialPath, `${JSON.stringify({
+    schema: "alphagraph-tenant-credential-v1",
+    username: plan.username,
+    tenantDid: plan.ledgerData.tenantDid,
+    password: plan.credential.password,
+    validUntil: plan.ledgerData.validUntil,
+    url: warehouseUrl,
+    warning: "Local secret. Deliver out-of-band. It must never enter git or the ledger.",
+  }, null, 2)}\n`);
+  return {
+    message: "Tenant grant recorded as TENANT_GRANTED. The credential stays local; the ledger holds no secret.",
+    username: plan.username,
+    tenantDid: plan.ledgerData.tenantDid,
+    validUntil: plan.ledgerData.validUntil,
+    seq: event.seq,
+    ledgerEvent: path,
+    ddl: ddlPath,
+    credentials: credentialPath,
+    executed,
+  };
+}
+
+async function tenantRevoke(args) {
+  if (!args.did || !args.identity) throw new Error("tenant-revoke requires --did DID and --identity PEM.");
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const username = tenantUsername(args.did);
+  const active = latestTenantGrant(await readLedger(ledgerDir), username);
+  if (!active) throw new Error(`No unrevoked TENANT_GRANTED event for ${username} is on the ledger.`);
+  const ddl = buildTenantRevokeDdl(username);
+  let executed = null;
+  if ("execute" in args) executed = (await executeStatements(tenantAdminFromEnv(), ddl)).executed;
+  const { event, path } = await appendEvent(ledgerDir, {
+    type: "TENANT_REVOKED",
+    data: buildTenantRevokeData({ did: args.did, reason: args.reason, grantSeq: active.seq }),
+    privateKey: identity.privateKey,
+  });
+  return {
+    message: "Tenant revoked and recorded as TENANT_REVOKED.",
+    username,
+    grantSeq: active.seq,
+    seq: event.seq,
+    ledgerEvent: path,
+    executed,
+  };
+}
+
+// 生データ公開レーン（無認証・再配布可）から取得したHL日次スナップショットを、
+// 計算持ち込みレーンのWarehouseへ搭載する。来歴は dataset_provenance にも入れて
+// テナント自身が csv_sha256 を突き合わせられるようにする。
+async function tenantLoadHl(args) {
+  for (const required of ["coin", "start", "end"]) {
+    if (!args[required]) throw new Error(`tenant-load-hl requires --${required}.`);
+  }
+  const result = await fetchHyperliquidCandles({ coin: args.coin, interval: "1d", start: args.start, end: args.end });
+  const provenance = result.provenance;
+  const chTime = (iso) => iso.slice(0, 19).replace("T", " ");
+  const rows = result.csv.trim().split("\n").slice(1).map((line) => {
+    const [timestamp, open, high, low, close, volume] = line.split(",");
+    return {
+      coin: provenance.symbol,
+      day: timestamp.slice(0, 10),
+      open: Number(open),
+      high: Number(high),
+      low: Number(low),
+      close: Number(close),
+      volume: Number(volume),
+      source: "hyperliquid-public-info-api",
+      csv_sha256: provenance.csvSha256,
+    };
+  });
+  const dataPath = resolve("artifacts", "tenant", `hl-${provenance.symbol.toLowerCase()}-1d.jsonl`);
+  await mkdir(resolve(dataPath, ".."), { recursive: true });
+  await writeFile(dataPath, `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`, "utf8");
+  const provenancePath = `${dataPath}.source.json`;
+  await writeJson(provenancePath, provenance);
+  let inserted = null;
+  if ("execute" in args) {
+    const connection = tenantAdminFromEnv();
+    inserted = (await insertJsonRows(connection, `${TENANT_DATABASE}.hl_candles_1d`, rows)).inserted;
+    await insertJsonRows(connection, `${TENANT_DATABASE}.dataset_provenance`, [{
+      dataset: "hl_candles_1d",
+      coin: provenance.symbol,
+      bar_interval: "1d",
+      bars: provenance.received.bars,
+      start_at: chTime(provenance.received.start),
+      end_at: chTime(provenance.received.end),
+      csv_sha256: provenance.csvSha256,
+      fetched_at: chTime(provenance.fetchedAt),
+      provenance_json: JSON.stringify(provenance),
+    }]);
+  }
+  return {
+    message: "Redistributable derived snapshot prepared from the public data lane. No credentials touched the fetch.",
+    bars: rows.length,
+    output: dataPath,
+    provenance: provenancePath,
+    sha256: provenance.csvSha256,
+    inserted,
+  };
+}
+
+async function tenantUsage(args) {
+  if (!args.identity) throw new Error("tenant-usage requires --identity PEM.");
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const date = args.date ?? new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const connection = tenantAdminFromEnv();
+  const rows = await queryJson(connection, buildUsageQuery(date));
+  const data = buildUsageData({ date, rows, endpointHost: connection.host });
+  const { event, path } = await appendEvent(resolve(args.ledger ?? "ledger"), {
+    type: "USAGE_REPORTED",
+    data,
+    privateKey: identity.privateKey,
+  });
+  return {
+    message: data.tenants.length
+      ? "Per-tenant usage recorded as USAGE_REPORTED. Detection over prevention: anyone can read these numbers."
+      : "No tenant queries on that day. The zero is recorded too; silence is also auditable.",
+    date,
+    tenants: data.tenants,
+    seq: event.seq,
+    ledgerEvent: path,
+  };
+}
+
+// 「自分のDIDで一周」の締め: テナント資格情報で実サービスに当たり、
+// 設計した遮断（#1811ゲート）が観測できることを確かめて報告書を残す。
+async function tenantVerify(args) {
+  if (!args.credentials) throw new Error("tenant-verify requires --credentials FILE (written by tenant-grant).");
+  const credential = await readJson(args.credentials);
+  if (credential.schema !== "alphagraph-tenant-credential-v1") throw new Error("Unsupported tenant credential schema.");
+  const url = args.url ?? credential.url;
+  if (!url) throw new Error("Pass --url; this credential file does not record the warehouse endpoint.");
+  const connection = createTenantConnection({ url, username: credential.username, password: credential.password });
+  const probes = [];
+  for (const probe of tenantCheckProbes()) {
+    const result = await runProbe(connection, probe.sql);
+    const pass = result.observed === probe.expect
+      && (!probe.expectBody || String(result.body).trim() === probe.expectBody);
+    probes.push({ name: probe.name, expected: probe.expect, observed: result.observed, pass, error: result.error });
+  }
+  const allPassed = probes.every((probe) => probe.pass);
+  const report = {
+    schema: "alphagraph-tenant-check-v1",
+    checkedAt: new Date().toISOString(),
+    username: credential.username,
+    tenantDid: credential.tenantDid ?? null,
+    endpointHost: connection.host,
+    allPassed,
+    probes,
+  };
+  const output = resolve(args.output ?? defaultOutput("tenant-checks", credential.username, hashJson(report)));
+  await writeJson(output, report);
+  if (!allPassed) process.exitCode = 1;
+  return {
+    message: allPassed
+      ? "Every gate probe behaved as designed. This report can be attested and cited."
+      : "Tenant gate probes FAILED. Do not onboard anyone until every probe passes.",
+    output,
+    allPassed,
+    probes,
+  };
+}
+
 async function attest(args) {
   for (const required of ["artifact", "identity", "role", "verdict", "statement"]) {
     if (!args[required]) throw new Error(`attest requires --${required}.`);
@@ -564,6 +822,12 @@ export async function runCli(argv) {
   if (command === "eval-intake") return evalIntake(args);
   if (command === "hl-universe") return hlUniverse(args);
   if (command === "fetch-hl") return fetchHl(args);
+  if (command === "tenant-init") return tenantInit(args);
+  if (command === "tenant-grant") return tenantGrant(args);
+  if (command === "tenant-revoke") return tenantRevoke(args);
+  if (command === "tenant-load-hl") return tenantLoadHl(args);
+  if (command === "tenant-usage") return tenantUsage(args);
+  if (command === "tenant-verify") return tenantVerify(args);
   if (command === "attest") return attest(args);
   if (command === "verify") return verify(args);
   if (command === "dashboard") return dashboard(args);
