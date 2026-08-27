@@ -5,3 +5,4 @@ site/
 .env
 .DS_Store
 
+private/

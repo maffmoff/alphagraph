@@ -1,0 +1,30 @@
+{
+  "schema": "alphagraph-ledger-event-v1",
+  "seq": 7,
+  "at": "2026-08-27T06:51:10.378Z",
+  "type": "REPRODUCTION_RECORDED",
+  "data": {
+    "grade": 1,
+    "paperHash": "86e3ca466a121bd76ddb1399e9526bc874341fe605e5ed6448bffd26a0c13187",
+    "subject": {
+      "strategyHash": "9121edf96feb8a03a39d80ff7762d056b1a1a0aa6b3f161291a20ac3d5a92878",
+      "dataSha256": "8c1e578e7ba72c257b01f77bd6e5e053ee4a18772a550fe675c719a6658de3d6"
+    },
+    "verdict": "match",
+    "contractHash": "3edce959b890e880357c27f6d997134e4e248221e3790d271573e1434680209e",
+    "author": {
+      "metricsHash": "d5da3a6618e398c2b93da637d808c112db285ef9188326524526fdbe0ec694bc",
+      "canonicalHash": "9258ee43b2d4fddb005d6fbf096d370a6758573bf5d34b328f6bb88a7602c119"
+    },
+    "candidate": {
+      "metricsHash": "d5da3a6618e398c2b93da637d808c112db285ef9188326524526fdbe0ec694bc",
+      "canonicalHash": "9258ee43b2d4fddb005d6fbf096d370a6758573bf5d34b328f6bb88a7602c119"
+    },
+    "reproducerDid": "did:key:z6MkrHpTidvhcgLJ6UVbNFinjEDKLjoeeoKudqvMBg5x1iaj"
+  },
+  "prevHash": "442b956de33bccea4c83531683ddeb8f670329e1dffc82b4d3bc17488b84d932",
+  "authorDid": "did:key:z6MkrHpTidvhcgLJ6UVbNFinjEDKLjoeeoKudqvMBg5x1iaj",
+  "canonical": "alphagraph-ledger-v1|7|2026-08-27T06:51:10.378Z|REPRODUCTION_RECORDED|9329d744089d796badbffe7378ea963b0551f773531bb6f5267813b61b2e8302|442b956de33bccea4c83531683ddeb8f670329e1dffc82b4d3bc17488b84d932",
+  "signature": "m74CxzTLqBpF4Pd8OpB2yHTeh0-acYBn29ItWqSexeVsmNnNbIIHRvzKgIVFtepk37n53Z1YuRP2xqevweNXDQ",
+  "hash": "571311800e1214f7710e873850a78e9ab9d7a832f05ce6bab6c2b5403e468f29"
+}

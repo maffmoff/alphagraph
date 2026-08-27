@@ -14,6 +14,12 @@ import {
   verifyAttestation,
 } from "./did.mjs";
 import { hashJson, readJson, writeJson } from "./core.mjs";
+import { REPRO_CONTRACT_HASH, compareReports, reproHashes } from "./repro.mjs";
+import { citationLedger, sealPaper, verifyReveal } from "./paper.mjs";
+import { appendEvent, readLedger, verifyChain } from "./ledger.mjs";
+import { buildSite } from "./site.mjs";
+import { fetchRoomSince, selectNewEvaluations } from "./eval-intake.mjs";
+import { fetchHyperliquidCandles, fetchHyperliquidUniverse } from "./data-source.mjs";
 
 const HELP = `AlphaGraph — Proof of Useful Strategy
 
@@ -22,6 +28,15 @@ Usage:
   alphagraph demo-data [--output FILE] [--bars NUMBER]
   alphagraph fetch-binance --symbol SYMBOL --interval INTERVAL --start ISO --end ISO [--output FILE]
   alphagraph backtest --proposal FILE --data CSV [--output FILE]
+  alphagraph reproduce --report FILE --data CSV [--output FILE] [--identity PEM] [--paper HASH] [--ledger DIR]
+  alphagraph seal --paper FILE --identity PEM [--ledger DIR] [--output FILE] [--commitment FILE]
+  alphagraph reveal --paper FILE --identity PEM [--ledger DIR] [--output DIR] [--early]
+  alphagraph ledger-verify [--ledger DIR]
+  alphagraph citations [--ledger DIR]
+  alphagraph site [--ledger DIR] [--output DIR]
+  alphagraph eval-intake --room ROOM --identity PEM [--ledger DIR] [--state FILE]
+  alphagraph hl-universe [--output FILE]
+  alphagraph fetch-hl --coin COIN --interval INTERVAL --start ISO --end ISO [--output FILE]
   alphagraph attest --artifact FILE --identity PEM --role ROLE --verdict VERDICT --statement TEXT [options]
   alphagraph verify --artifact FILE --attestation FILE
   alphagraph dashboard [--reports DIR] [--output FILE]
@@ -38,12 +53,16 @@ Attest options:
   --output FILE                Attestation output path.
 
 Passphrase fallback:
-  If --keychain-service is omitted, set TRADECORE_PASSPHRASE in the environment.
+  If --keychain-service is omitted, set ALPHAGRAPH_PASSPHRASE in the environment.
+  (TRADECORE_PASSPHRASE is still accepted for existing keys.)
 
 Safety:
   Backtests and the dashboard are research artifacts, not trading instructions.
   Technocore is written only by the publish command with --confirm PUBLISH.
 `;
+
+// 値を取らない真偽フラグ。ここに無い --key は値を要求する。
+const BOOLEAN_FLAGS = new Set(["early"]);
 
 function parseArgs(argv) {
   const result = { _: [] };
@@ -54,6 +73,10 @@ function parseArgs(argv) {
       continue;
     }
     const key = argument.slice(2);
+    if (BOOLEAN_FLAGS.has(key)) {
+      result[key] = true;
+      continue;
+    }
     const value = argv[index + 1];
     if (value === undefined || value.startsWith("--")) throw new Error(`Missing value for --${key}.`);
     result[key] = value;
@@ -145,6 +168,7 @@ async function backtest(args) {
     sha256: hashJson(proposal),
     strategyHash: proposal.strategyHash,
   };
+  report.reproduction = reproHashes(report);
   const output = resolve(args.output ?? defaultOutput("reports", strategy.id, report.data.sha256));
   await writeJson(output, report);
   return {
@@ -160,7 +184,252 @@ function identityPassphrase(args) {
   if (args["keychain-service"]) {
     return passphraseFromKeychain(args["keychain-service"], args["keychain-account"]);
   }
-  return process.env.TRADECORE_PASSPHRASE;
+  return process.env.ALPHAGRAPH_PASSPHRASE ?? process.env.TRADECORE_PASSPHRASE;
+}
+
+async function reproduce(args) {
+  if (!args.report || !args.data) throw new Error("reproduce requires --report FILE and --data CSV.");
+  const authorReport = await readJson(args.report);
+  const strategy = validateStrategy(authorReport.strategy);
+  if (hashJson(strategy) !== authorReport.strategyHash) {
+    throw new Error("Report strategy hash does not match its contents.");
+  }
+  const candidate = await backtestFromCsv(strategy, args.data);
+  const comparison = compareReports(authorReport, candidate);
+  const record = {
+    schema: "alphagraph-reproduction-v1",
+    grade: 1,
+    contract: { schema: "alphagraph-repro-contract-v1", hash: REPRO_CONTRACT_HASH },
+    ...comparison,
+  };
+  const output = resolve(args.output ?? defaultOutput("reproductions", strategy.id, comparison.candidate.canonicalHash));
+  await writeJson(output, record);
+  // 再現は台帳に積まれて初めてネットワークの計器に乗る（docs/fable-concept.md §7）。
+  // --identity があれば REPRODUCTION_RECORDED を追記する。--paper で対象論文に結び付ける。
+  let ledgerEvent = null;
+  if (args.identity) {
+    const identity = await loadIdentity(args.identity, identityPassphrase(args));
+    const appended = await appendEvent(resolve(args.ledger ?? "ledger"), {
+      type: "REPRODUCTION_RECORDED",
+      data: {
+        grade: 1,
+        paperHash: args.paper ?? null,
+        subject: comparison.subject,
+        verdict: comparison.verdict,
+        contractHash: REPRO_CONTRACT_HASH,
+        author: comparison.author,
+        candidate: comparison.candidate,
+        reproducerDid: identity.did,
+      },
+      privateKey: identity.privateKey,
+    });
+    ledgerEvent = appended.path;
+  }
+  if (!comparison.reproduced) process.exitCode = 1;
+  return {
+    ledgerEvent,
+    message: comparison.reproduced
+      ? "Grade-1 reproduction succeeded. Sign it with: alphagraph attest --verdict reproduced"
+      : `Grade-1 reproduction failed (${comparison.verdict}).`,
+    output,
+    verdict: comparison.verdict,
+    note: comparison.note,
+    differences: comparison.differences,
+  };
+}
+
+async function seal(args) {
+  if (!args.paper || !args.identity) throw new Error("seal requires --paper FILE and --identity PEM.");
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const sealed = sealPaper(await readJson(args.paper));
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  // 台帳に載るのは commitment（ハッシュ・型・公開予定・引用・データ釘）だけ。
+  // 主張も方法も出ない。これが封緘＝commit-reveal の commit 側。
+  const { event, path } = await appendEvent(ledgerDir, {
+    type: "PAPER_SEALED",
+    data: sealed.commitment,
+    privateKey: identity.privateKey,
+  });
+  const record = {
+    schema: "alphagraph-sealed-paper-v1",
+    paperHash: sealed.paperHash,
+    sealedBy: identity.did,
+    ledger: { seq: event.seq, eventHash: event.hash, at: event.at },
+    commitment: sealed.commitment,
+    paper: sealed.paper,
+  };
+  const output = resolve(args.output ?? defaultOutput("sealed", sealed.paper.id, sealed.paperHash));
+  await writeJson(output, record);
+  // 告知用の公開成果物。台帳イベントの data と同一なので、そのハッシュは
+  // 誰でも台帳から再計算できる（event.canonical に hashJson(data) が入っている）。
+  // 封緘済みレコードの方は全文を含むため、そのハッシュを告知に使っても台帳から辿れない。
+  const commitmentPath = resolve(args.commitment ?? defaultOutput("commitments", sealed.paper.id, hashJson(sealed.commitment)));
+  await writeJson(commitmentPath, sealed.commitment);
+  return {
+    message: "Paper sealed. Only the commitment is on the ledger; the full text stays local until reveal.",
+    output,
+    commitment: commitmentPath,
+    ledgerEvent: path,
+    paperHash: sealed.paperHash,
+    commitmentHash: hashJson(sealed.commitment),
+    did: identity.did,
+    seq: event.seq,
+  };
+}
+
+// reveal＝commit-reveal の reveal 側（docs/fable-concept.md §2、docs/ledger-design.md 部品2）。
+// 猶予期間の満了時に全文を公開し、台帳が封緘時のハッシュとの一致を検証する。
+// 一致しない全文は受け付けない——後から主張を書き換える経路を塞ぐのが封緘の目的なので、
+// ここを緩めると制度全体が意味を失う。
+async function reveal(args) {
+  if (!args.paper || !args.identity) throw new Error("reveal requires --paper FILE and --identity PEM.");
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const paper = await readJson(args.paper);
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const events = await readLedger(ledgerDir);
+  const sealedEvent = events.find(
+    (event) => event.type === "PAPER_SEALED" && event.data.paperHash === hashJson(paper),
+  );
+  if (!sealedEvent) {
+    throw new Error("No PAPER_SEALED event on this ledger matches the submitted full text. Reveal is refused.");
+  }
+  const check = verifyReveal(paper, sealedEvent.data.paperHash);
+  if (!check.valid) throw new Error(`Revealed text hashes to ${check.paperHash}, not the sealed ${check.expected}.`);
+  if (events.some((event) => event.type === "PAPER_REVEALED" && event.data.paperHash === check.paperHash)) {
+    throw new Error("This paper has already been revealed on the ledger.");
+  }
+  // 猶予期間中の早期公開は著者の権利だが（猶予は上限であって義務ではない・§2）、
+  // 事故で出してしまうと取り返しがつかない。明示的な --early を要求する。
+  // 起点は封緘時とする（未決1: 起点をラウンド退出時にする案が未決）。
+  if (sealedEvent.data.disclosure?.policy === "embargo" && !("early" in args)) {
+    const endsAt = Date.parse(sealedEvent.at) + (sealedEvent.data.disclosure.embargoDays * 86_400_000);
+    if (Date.now() < endsAt) {
+      const daysLeft = Math.ceil((endsAt - Date.now()) / 86_400_000);
+      throw new Error(
+        `Embargo has ${daysLeft} day(s) left (until ${new Date(endsAt).toISOString()}). `
+        + "Revealing early is allowed but must be deliberate: pass --early.",
+      );
+    }
+  }
+
+  // 全文は公開ディレクトリへ。ここに置かれたものが「公開された」の実体になる。
+  const publicDir = resolve(args.output ?? "papers");
+  const publicPath = resolve(publicDir, `${sealedEvent.data.id}.json`);
+  await writeJson(publicPath, paper);
+
+  const { event, path } = await appendEvent(ledgerDir, {
+    type: "PAPER_REVEALED",
+    data: {
+      paperHash: check.paperHash,
+      id: sealedEvent.data.id,
+      sealedSeq: sealedEvent.seq,
+      sealedAt: sealedEvent.at,
+      publishedPath: `papers/${sealedEvent.data.id}.json`,
+      revealedBy: identity.did,
+    },
+    privateKey: identity.privateKey,
+  });
+  return {
+    message: "Full text published and matched against the seal. The paper is now citable in full.",
+    paper: publicPath,
+    ledgerEvent: path,
+    paperHash: check.paperHash,
+    seq: event.seq,
+  };
+}
+
+async function ledgerVerify(args) {
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const result = verifyChain(await readLedger(ledgerDir));
+  if (!result.valid) process.exitCode = 1;
+  return { message: result.valid ? "Ledger chain is intact." : "Ledger chain is BROKEN.", ledger: ledgerDir, ...result };
+}
+
+async function citations(args) {
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const events = await readLedger(ledgerDir);
+  const graph = citationLedger(events.filter((event) => event.type === "PAPER_SEALED").map((event) => event.data));
+  return {
+    message: "Citation graph folded from the ledger. Counts are kept per kind; unsigned totals are never used.",
+    papers: graph.length,
+    nodes: graph.map((node) => ({
+      id: node.id ?? null,
+      paperHash: node.paperHash.slice(0, 12),
+      type: node.type ?? "external",
+      cites: node.cites.map((citation) => `${citation.kind}:${citation.paperHash.slice(0, 12)}`),
+      citedBy: node.counts,
+    })),
+  };
+}
+
+async function site(args) {
+  const result = await buildSite(resolve(args.ledger ?? "ledger"), resolve(args.output ?? "site"));
+  return { message: "Ledger projected to a deterministic static page. Re-generating from the same ledger yields the same hash.", ...result };
+}
+
+// Technocore の署名付き反応を EVALUATION_SIGNED として台帳に積む（src/eval-intake.mjs）。
+async function evalIntake(args) {
+  if (!args.room || !args.identity) throw new Error("eval-intake requires --room ROOM and --identity PEM.");
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const statePath = resolve(args.state ?? "artifacts/eval-intake-state.json");
+  let state = { rooms: {} };
+  try { state = await readJson(statePath); } catch { /* 初回 */ }
+  const sinceSeq = state.rooms?.[args.room] ?? 0;
+
+  const { lastSeq, messages } = await fetchRoomSince(args.room, sinceSeq);
+  const ledgerEvents = await readLedger(ledgerDir);
+  const fresh = selectNewEvaluations(ledgerEvents, messages);
+  const appended = [];
+  for (const evaluation of fresh) {
+    const { event } = await appendEvent(ledgerDir, {
+      type: "EVALUATION_SIGNED",
+      data: evaluation,
+      privateKey: identity.privateKey,
+    });
+    appended.push({ seq: event.seq, paperHash: evaluation.paperHash.slice(0, 12), verdict: evaluation.verdict, from: evaluation.evaluatorDid.slice(0, 24) });
+  }
+  state.rooms = { ...state.rooms, [args.room]: lastSeq };
+  await writeJson(statePath, state);
+  return {
+    message: appended.length
+      ? "Signed reactions recorded as EVALUATION_SIGNED. They are server-attested, not independently verifiable (fable-concept §6)."
+      : "No new signed evaluations in this room.",
+    room: args.room,
+    scannedUpTo: lastSeq,
+    recorded: appended,
+  };
+}
+
+async function hlUniverse(args) {
+  const result = await fetchHyperliquidUniverse();
+  const output = resolve(args.output ?? "data/hl-universe.json");
+  await writeJson(output, { schema: "alphagraph-universe-v1", provenance: result.provenance, coins: result.coins });
+  return { message: "Hyperliquid perp universe downloaded from the public info API. No credentials were used.", output, coins: result.coins.length };
+}
+
+async function fetchHl(args) {
+  for (const required of ["coin", "interval", "start", "end"]) {
+    if (!args[required]) throw new Error(`fetch-hl requires --${required}.`);
+  }
+  const result = await fetchHyperliquidCandles({
+    coin: args.coin,
+    interval: args.interval,
+    start: args.start,
+    end: args.end,
+  });
+  const output = resolve(args.output ?? `data/hl-${args.coin.toLowerCase()}-${args.interval}.csv`);
+  await mkdir(resolve(output, ".."), { recursive: true });
+  await writeFile(output, result.csv, "utf8");
+  const provenanceOutput = `${output}.source.json`;
+  await writeJson(provenanceOutput, result.provenance);
+  return {
+    message: "Public Hyperliquid candles downloaded. No API key, wallet, or signature was used.",
+    output,
+    provenance: provenanceOutput,
+    bars: result.provenance.received.bars,
+    sha256: result.provenance.csvSha256,
+  };
 }
 
 async function attest(args) {
@@ -225,7 +494,7 @@ async function publish(args) {
 async function keygen(args) {
   if (!args.output) throw new Error("keygen requires --output PEM.");
   const passphrase = identityPassphrase(args);
-  if (!passphrase) throw new Error("Set TRADECORE_PASSPHRASE or use --keychain-service to encrypt the new key.");
+  if (!passphrase) throw new Error("Set ALPHAGRAPH_PASSPHRASE or use --keychain-service to encrypt the new key.");
   const { privateKey } = generateKeyPairSync("ed25519");
   const pem = privateKey.export({
     format: "pem",
@@ -286,6 +555,15 @@ export async function runCli(argv) {
   if (command === "demo-data") return demoData(args);
   if (command === "fetch-binance") return fetchBinance(args);
   if (command === "backtest") return backtest(args);
+  if (command === "reproduce") return reproduce(args);
+  if (command === "seal") return seal(args);
+  if (command === "reveal") return reveal(args);
+  if (command === "ledger-verify") return ledgerVerify(args);
+  if (command === "citations") return citations(args);
+  if (command === "site") return site(args);
+  if (command === "eval-intake") return evalIntake(args);
+  if (command === "hl-universe") return hlUniverse(args);
+  if (command === "fetch-hl") return fetchHl(args);
   if (command === "attest") return attest(args);
   if (command === "verify") return verify(args);
   if (command === "dashboard") return dashboard(args);

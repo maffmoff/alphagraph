@@ -1,0 +1,43 @@
+{
+  "schema": "alphagraph-ledger-event-v1",
+  "seq": 2,
+  "at": "2026-08-27T00:53:56.067Z",
+  "type": "PAPER_SEALED",
+  "data": {
+    "paperHash": "28c026c0e76b06ace71e9e0bda232c6487daeb729a21c5fb9bbc5a26129acc9d",
+    "type": "empirical",
+    "id": "ag-e-0001",
+    "disclosure": {
+      "policy": "immediate"
+    },
+    "citations": [
+      {
+        "kind": "depends-on",
+        "paperHash": "26e5ca1730b9c3fffca6a1d025e34f20e11a9d7520051bb8733703817c2e5037",
+        "note": "釘付けした系列の供給源"
+      }
+    ],
+    "dataPins": [
+      {
+        "seriesId": "hl:BTC:1d:2025-08-01/2026-08-25",
+        "sha256": "59c0fc83f83f1ec3482cfce9045aded022b4dfdae9f039e8ae9505e5b12c12e0",
+        "redistributable": true
+      },
+      {
+        "seriesId": "hl:ETH:1d:2025-08-01/2026-08-25",
+        "sha256": "d083815563bacf1998f29f3be6e0db89d7d043c6272c7db2e108ffd97e09a0b4",
+        "redistributable": true
+      },
+      {
+        "seriesId": "hl:SOL:1d:2025-08-01/2026-08-25",
+        "sha256": "79d695a3a8a500850b49671edb8a9aef194b59f130a26c4fa141f3dc70df8ef8",
+        "redistributable": true
+      }
+    ]
+  },
+  "prevHash": "85ce6aab2a301865523d3f4468e4b6143df9d6d93b9392dbe325c34436d111dc",
+  "authorDid": "did:key:z6MkrHpTidvhcgLJ6UVbNFinjEDKLjoeeoKudqvMBg5x1iaj",
+  "canonical": "alphagraph-ledger-v1|2|2026-08-27T00:53:56.067Z|PAPER_SEALED|40dfcb698751ee1bf66b7b42c500177b25375478dfda80648c3c4c7ef5d160ea|85ce6aab2a301865523d3f4468e4b6143df9d6d93b9392dbe325c34436d111dc",
+  "signature": "MxRdRSanSL0bkPu6Z0H_mYUUSzcSEvmm1UiO0mhq3PShHHA5PsBajbOZIzALQSugICfAcfDTadGSffCwoANfAQ",
+  "hash": "9ef3a5ee3d47728ce31515c58006b23a818dd839492921e987d108a03186a4fc"
+}

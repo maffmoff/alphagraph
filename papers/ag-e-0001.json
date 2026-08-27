@@ -1,0 +1,59 @@
+{
+  "schema": "alphagraph-paper-v1",
+  "type": "empirical",
+  "id": "ag-e-0001",
+  "title": "HL perp日次データにおける出来高と|リターン|の同時結合",
+  "claim": "HL perpの日次データで、|リターン|と出来高の同時順位相関は主要銘柄で一貫して正であり、出来高上位20%の日の|リターns|中央値は下位20%の約5倍になる。",
+  "mechanism": "情報到着が売買と価格変化を同時に生む（mixture of distributions）。加えて在庫を持つマーケットメイカーは価格変化時に在庫調整を強いられ、出来高が内生的に増える。制度的に「出来高だけが増えて価格が動かない」状態は在庫制約下で維持しにくい。",
+  "whoPays": "この観察自体は直接の払い手を持たない負の結果に近い基礎観察。ただし出来高を見ずに執行する参加者は、高出来高日に想定より大きな価格変化を被る。",
+  "verification": {
+    "data": [
+      {
+        "seriesId": "hl:BTC:1d:2025-08-01/2026-08-25",
+        "sha256": "59c0fc83f83f1ec3482cfce9045aded022b4dfdae9f039e8ae9505e5b12c12e0",
+        "source": "Hyperliquid public info API",
+        "url": "https://api.hyperliquid.xyz/info",
+        "license": "public on-chain / public API data",
+        "redistributable": true
+      },
+      {
+        "seriesId": "hl:ETH:1d:2025-08-01/2026-08-25",
+        "sha256": "d083815563bacf1998f29f3be6e0db89d7d043c6272c7db2e108ffd97e09a0b4",
+        "source": "Hyperliquid public info API",
+        "url": "https://api.hyperliquid.xyz/info",
+        "license": "public on-chain / public API data",
+        "redistributable": true
+      },
+      {
+        "seriesId": "hl:SOL:1d:2025-08-01/2026-08-25",
+        "sha256": "79d695a3a8a500850b49671edb8a9aef194b59f130a26c4fa141f3dc70df8ef8",
+        "source": "Hyperliquid public info API",
+        "url": "https://api.hyperliquid.xyz/info",
+        "license": "public on-chain / public API data",
+        "redistributable": true
+      }
+    ],
+    "method": "examples/papers/ag-e-0001-volume-return-coupling.mjs を対象CSVに対して実行し、決定的なJSON1個を出力する。",
+    "successCriteria": "3系列すべてで spearmanAbsReturnVolume > 0、かつ highOverLowRatio > 2。出力JSONのハッシュが再現者と一致すること。",
+    "costs": "計算のみ。"
+  },
+  "code": {
+    "path": "examples/papers/ag-e-0001-volume-return-coupling.mjs",
+    "sha256": "6d6fd8c1c52f16d6e1c4278e82a5d06077fc755525dd7e655a4fdc91cf89fa4b"
+  },
+  "citations": [
+    {
+      "kind": "depends-on",
+      "paperHash": "26e5ca1730b9c3fffca6a1d025e34f20e11a9d7520051bb8733703817c2e5037",
+      "note": "釘付けした系列の供給源"
+    }
+  ],
+  "runtime": {
+    "engine": "alphagraph",
+    "version": "0.2.0",
+    "node": ">=20"
+  },
+  "disclosure": {
+    "policy": "immediate"
+  }
+}
