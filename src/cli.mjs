@@ -27,7 +27,7 @@ Usage:
   alphagraph fetch-binance --symbol SYMBOL --interval INTERVAL --start ISO --end ISO [--output FILE]
   alphagraph backtest --proposal FILE --data CSV [--output FILE]
   alphagraph reproduce --report FILE --data CSV [--output FILE]
-  alphagraph seal --paper FILE --identity PEM [--ledger DIR] [--output FILE]
+  alphagraph seal --paper FILE --identity PEM [--ledger DIR] [--output FILE] [--commitment FILE]
   alphagraph ledger-verify [--ledger DIR]
   alphagraph citations [--ledger DIR]
   alphagraph hl-universe [--output FILE]
@@ -226,11 +226,18 @@ async function seal(args) {
   };
   const output = resolve(args.output ?? defaultOutput("sealed", sealed.paper.id, sealed.paperHash));
   await writeJson(output, record);
+  // 告知用の公開成果物。台帳イベントの data と同一なので、そのハッシュは
+  // 誰でも台帳から再計算できる（event.canonical に hashJson(data) が入っている）。
+  // 封緘済みレコードの方は全文を含むため、そのハッシュを告知に使っても台帳から辿れない。
+  const commitmentPath = resolve(args.commitment ?? defaultOutput("commitments", sealed.paper.id, hashJson(sealed.commitment)));
+  await writeJson(commitmentPath, sealed.commitment);
   return {
     message: "Paper sealed. Only the commitment is on the ledger; the full text stays local until reveal.",
     output,
+    commitment: commitmentPath,
     ledgerEvent: path,
     paperHash: sealed.paperHash,
+    commitmentHash: hashJson(sealed.commitment),
     did: identity.did,
     seq: event.seq,
   };

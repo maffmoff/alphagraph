@@ -1,16 +1,22 @@
 {
   "schema": "alphagraph-ledger-event-v1",
-  "seq": 1,
-  "at": "2026-08-26T20:03:16.477Z",
+  "seq": 5,
+  "at": "2026-08-27T00:53:56.264Z",
   "type": "PAPER_SEALED",
   "data": {
-    "paperHash": "26e5ca1730b9c3fffca6a1d025e34f20e11a9d7520051bb8733703817c2e5037",
-    "type": "dataset",
-    "id": "ag-d-0001",
+    "paperHash": "52c3e6a925673d41865a3182a2caa141f18acfe3d51b55fde2a320ca38eeee7a",
+    "type": "strategy",
+    "id": "ag-s-0003",
     "disclosure": {
-      "policy": "immediate"
+      "policy": "embargo",
+      "embargoDays": 90
     },
-    "citations": [],
+    "citations": [
+      {
+        "kind": "depends-on",
+        "paperHash": "26e5ca1730b9c3fffca6a1d025e34f20e11a9d7520051bb8733703817c2e5037"
+      }
+    ],
     "dataPins": [
       {
         "seriesId": "hl:BTC:1d:2025-08-01/2026-08-25",
@@ -34,9 +40,9 @@
       }
     ]
   },
-  "prevHash": "0000000000000000000000000000000000000000000000000000000000000000",
+  "prevHash": "79f990ccd5079a1141ca95578f1d63f70980c4d536b225fa113a3f9feb064643",
   "authorDid": "did:key:z6MkrHpTidvhcgLJ6UVbNFinjEDKLjoeeoKudqvMBg5x1iaj",
-  "canonical": "alphagraph-ledger-v1|1|2026-08-26T20:03:16.477Z|PAPER_SEALED|0eb53cfee72cfde07e3a74f4e51e13c1e4be01c4a809ca3f26566d4090cd525a|0000000000000000000000000000000000000000000000000000000000000000",
-  "signature": "kCV4gRCOlVHG3XCmn-xrzMnjJiwUoZoj-bLwr4kWu6CvS7-WtRheM8xXwWH8h43Ns7FBv43So9QIRB0SsogwBw",
-  "hash": "0ef6983ba03a76bae0950d59a9692024811bb5094403322508eb9413f16b934c"
+  "canonical": "alphagraph-ledger-v1|5|2026-08-27T00:53:56.264Z|PAPER_SEALED|c53bec534ddc1734b9e407367ddc6d3b298e8c744b5d00d9125a3055e8e44387|79f990ccd5079a1141ca95578f1d63f70980c4d536b225fa113a3f9feb064643",
+  "signature": "raq9SDfmviY1AXijd8R7fQfoA45ruvn0CyXe2rizCbXjfeSvILLzwTYymM_nex4MNZZ7bs7A_x_SSjErJpslCg",
+  "hash": "1762dfe3ce17c70ddf418b46ea59e413876296585a90e3e73a58c05dc2a9c596"
 }

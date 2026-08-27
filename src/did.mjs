@@ -169,13 +169,50 @@ export function verifyAttestation(attestation, artifact) {
   return { valid, artifactHash, did: attestation.did };
 }
 
-export async function publishTechnocoreAttestation(attestation, fetchImpl = fetch) {
+// 実測（2026-08-27）: 署名付き書き込みは届いたのに、クライアントには応答が返らず
+// タイムアウトまたは503になることがある。しかもTechnocoreの署名URLは単回限りで、
+// nonceはその鍵・その部屋での前回より大きくなければならない。よって盲目的な再送は
+// 400を返すだけで害になる。応答が失敗した時は再送せず、部屋を読み戻して確かめる。
+async function technocoreRoomContains(room, did, text, fetchImpl) {
+  try {
+    const url = new URL(`https://technocore.chat/r/${room}`);
+    url.searchParams.set("format", "json");
+    url.searchParams.set("limit", "50");
+    const response = await fetchImpl(url, { redirect: "error" });
+    if (!response.ok) return false;
+    const parsed = JSON.parse(await response.text());
+    return Array.isArray(parsed.messages) && parsed.messages.some((entry) => entry?.from === did && entry?.text === text);
+  } catch {
+    return false;
+  }
+}
+
+export async function publishTechnocoreAttestation(attestation, fetchImpl = fetch, options = {}) {
+  const { timeoutMs = 15_000, confirm = true } = options;
   const writeUrl = attestation?.technocore?.writeUrl;
   if (!writeUrl || new URL(writeUrl).origin !== "https://technocore.chat") {
     throw new Error("Attestation does not contain a valid Technocore write preview.");
   }
-  const response = await fetchImpl(writeUrl, { redirect: "error" });
-  const body = await response.text();
-  if (!response.ok) throw new Error(`Technocore returned HTTP ${response.status}: ${body}`);
-  return { ok: true, status: response.status, body };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let failure;
+  try {
+    const response = await fetchImpl(writeUrl, { redirect: "error", signal: controller.signal });
+    const body = await response.text();
+    if (response.ok) return { ok: true, status: response.status, body, confirmed: null };
+    failure = new Error(`Technocore returned HTTP ${response.status}: ${body}`);
+  } catch (error) {
+    failure = error instanceof Error ? error : new Error(String(error));
+  } finally {
+    clearTimeout(timer);
+  }
+  if (confirm && await technocoreRoomContains(attestation.technocore.room, attestation.did, attestation.technocore.message, fetchImpl)) {
+    return {
+      ok: true,
+      status: null,
+      confirmed: true,
+      note: "The write landed even though its response did not. Confirmed by reading the room back; the signed URL was not resent.",
+    };
+  }
+  throw failure;
 }
