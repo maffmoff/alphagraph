@@ -39,6 +39,12 @@ import {
   runProbe,
   tenantAdminFromEnv,
 } from "./tenant-admin.mjs";
+import {
+  fetchUsageCost,
+  parseIpAllowList,
+  provisionTenantService,
+  tenantCloudFromEnv,
+} from "./tenant-cloud.mjs";
 
 const HELP = `AlphaGraph — Proof of Useful Strategy
 
@@ -56,6 +62,8 @@ Usage:
   alphagraph eval-intake --room ROOM --identity PEM [--ledger DIR] [--state FILE]
   alphagraph hl-universe [--output FILE]
   alphagraph fetch-hl --coin COIN --interval INTERVAL --start ISO --end ISO [--output FILE]
+  alphagraph tenant-provision --provider aws|gcp|azure --region REGION --ip CIDRS|anywhere --confirm CREATE [--name NAME] [--warehouse-id ID] [--idle-minutes N] [--memory-gb N]
+  alphagraph tenant-cost [--days N]
   alphagraph tenant-init [--output FILE] [--execute]
   alphagraph tenant-grant --did DID --identity PEM [--days N] [--ledger DIR] [--execute]
   alphagraph tenant-revoke --did DID --identity PEM [--reason TEXT] [--ledger DIR] [--execute]
@@ -86,6 +94,10 @@ Tenant lane (docs/data-tenancy.md):
   ALPHAGRAPH_TENANT_ADMIN_URL / _USER / _PASSWORD. Never point those at the
   bot-2509 primary. Credential files written by tenant-grant stay local;
   the public ledger records the grant but never a secret.
+  tenant-provision and tenant-cost use the ClickHouse Cloud control plane via
+  ALPHAGRAPH_TENANT_CLOUD_KEY_ID / _KEY_SECRET [/ _ORG_ID] — an OpenAPI key
+  issued for the tenant organization only. Provisioning creates a paid
+  service, so it demands the exact flag --confirm CREATE.
 
 Safety:
   Backtests and the dashboard are research artifacts, not trading instructions.
@@ -480,6 +492,73 @@ async function writeSecretFile(path, text) {
   await writeFile(path, text, { encoding: "utf8", mode: 0o600 });
 }
 
+// 専用サービスの新設をコンソール手作業からAPIに置き換える（docs/data-tenancy.md §7-1）。
+// 費用が発生する行為なので publish と同じ作法で --confirm CREATE を要求する。
+async function tenantProvision(args) {
+  for (const required of ["provider", "region", "ip"]) {
+    if (!args[required]) throw new Error(`tenant-provision requires --${required}.`);
+  }
+  if (args.confirm !== "CREATE") {
+    throw new Error("Provisioning creates a billable service. It requires the exact flag --confirm CREATE.");
+  }
+  const client = tenantCloudFromEnv();
+  const result = await provisionTenantService(client, {
+    name: args.name,
+    provider: args.provider,
+    region: args.region,
+    ipAccessList: parseIpAllowList(args.ip),
+    memoryGb: args["memory-gb"] ? Number(args["memory-gb"]) : undefined,
+    idleTimeoutMinutes: args["idle-minutes"] ? Number(args["idle-minutes"]) : undefined,
+    warehouseId: args["warehouse-id"],
+  });
+  // 管理パスワードは一度しか返らない。stdout（会話ログ）に出さず、mode 600 のファイルだけに書く。
+  const credentialPath = resolve("artifacts", "tenant", "service-admin.credential.json");
+  await writeSecretFile(credentialPath, `${JSON.stringify({
+    schema: "alphagraph-tenant-service-admin-v1",
+    serviceId: result.service.id,
+    serviceName: result.service.name,
+    organizationId: result.organizationId,
+    url: result.adminUrl,
+    username: "default",
+    password: result.password,
+    createdAt: new Date().toISOString(),
+    warning: "Local secret. Export it as ALPHAGRAPH_TENANT_ADMIN_* for --execute commands; never commit it.",
+  }, null, 2)}\n`);
+  return {
+    message: result.warnings.length
+      ? "Service created BUT with warnings — resolve them before leaving it running."
+      : "Dedicated tenant service created with idle scaling verified on. Next: export ALPHAGRAPH_TENANT_ADMIN_* from the credential file, then tenant-init --execute.",
+    serviceId: result.service.id,
+    name: result.service.name,
+    state: result.service.state,
+    region: result.service.region,
+    idleScaling: result.service.idleScaling,
+    idleTimeoutMinutes: result.service.idleTimeoutMinutes,
+    readonlySecondary: result.service.isReadonly ?? false,
+    adminUrl: result.adminUrl,
+    credentials: credentialPath,
+    warnings: result.warnings,
+  };
+}
+
+// idle停止が本当に効いているかは請求額にしか現れない（#3812の教訓）。日次で機械が読む。
+async function tenantCost(args) {
+  const days = args.days ? Number(args.days) : 7;
+  const toDate = new Date().toISOString().slice(0, 10);
+  const fromDate = new Date(Date.now() - (days * 86_400_000)).toISOString().slice(0, 10);
+  const report = await fetchUsageCost(tenantCloudFromEnv(), { fromDate, toDate });
+  const output = resolve("artifacts", "tenant", `cost-${toDate}.json`);
+  await writeJson(output, { schema: "alphagraph-tenant-cost-v1", ...report });
+  return {
+    message: "Usage cost in ClickHouse Credits. Watch this daily (cron) — an idle service that never idles shows up here first.",
+    fromDate,
+    toDate,
+    grandTotalCHC: report.grandTotalCHC,
+    services: report.services,
+    output,
+  };
+}
+
 async function tenantInit(args) {
   const ddl = buildBaseDdl();
   const output = resolve(args.output ?? "artifacts/tenant/base.sql");
@@ -822,6 +901,8 @@ export async function runCli(argv) {
   if (command === "eval-intake") return evalIntake(args);
   if (command === "hl-universe") return hlUniverse(args);
   if (command === "fetch-hl") return fetchHl(args);
+  if (command === "tenant-provision") return tenantProvision(args);
+  if (command === "tenant-cost") return tenantCost(args);
   if (command === "tenant-init") return tenantInit(args);
   if (command === "tenant-grant") return tenantGrant(args);
   if (command === "tenant-revoke") return tenantRevoke(args);

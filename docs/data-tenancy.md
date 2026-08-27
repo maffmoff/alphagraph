@@ -64,6 +64,10 @@ fable-concept §6「データ=二レーン」の**計算持ち込みレーンの
 ## 7. 人間承認・人間作業（このリポジトリの外）
 
 1. ClickHouse Cloud での新サービス作成と予算上限（費用が発生する）
+   — **作成自体は `tenant-provision` でAPI化済み（§8）**。残る人間作業は
+   (a) テナント用organizationのOpenAPI key発行（コンソール・一回だけ）と
+   (b) 課金通知しきい値の設定（Billing通知はAPIに無いためコンソール。日次の実測は
+   `tenant-cost` が代替線）、(c) `--confirm CREATE` 実行の承認
 2. bot-2509 側の #1811 再開レビュー（「独立issue/PRで再評価」が再開条件のため、bot-2509にissueを立てる）
 3. 規制確認への追記（外部への計算資源提供の性質）
 
@@ -90,9 +94,23 @@ SETTINGS PROFILEは `readonly=1 CONST`・`allow_ddl=0 CONST`・8GB/query・120s�
 `KEYED BY user_name` で 60q/min・500GB read/day（DIDごとのレート制限＝fable-concept §5）。
 RESTRICTIVE ROW POLICY `day < today()` が TIMESERIES_CUTOFF の転用。
 
+**コントロールプレーン（サービス新設のAPI化）**: `src/tenant-cloud.mjs` が
+api.clickhouse.cloud を叩く。環境変数は `ALPHAGRAPH_TENANT_CLOUD_KEY_ID` / `_KEY_SECRET` /
+`_ORG_ID`（任意）のみで、admin接続と同じくフォールバック経路の不在をテストが検査する。
+`tenant-provision` は費用が発生するため `--confirm CREATE` を要求し、小構成（8GB×1replica）・
+`idleScaling: true`・`idleTimeoutMinutes`（既定15分）で作成した上で、**応答の実効値で
+idleScaling が有効になったことを検証**する（#3812 は「頼んだ」と「付いた」の乖離に誰も
+気付かなかった事故）。ingressは `--ip` で明示必須（全開は `anywhere` と書いた時だけ）。
+`--warehouse-id` を渡すと既存Warehouseの read-only secondary（方式A）として立つ。
+管理パスワードは一度しか返らないため stdout に出さず mode 600 のファイルにのみ書く。
+`tenant-cost` は usageCost API の日次コスト（CHC建て）を集計する監視線で、cron 候補。
+
 **自分のDIDで一周（runbook）**:
 
-1. （人間）ClickHouse Cloud で専用Warehouse作成＋予算アラート → `ALPHAGRAPH_TENANT_ADMIN_*` を設定
+1. （人間）テナント用organizationのOpenAPI keyをコンソールで発行し
+   `ALPHAGRAPH_TENANT_CLOUD_KEY_ID/_KEY_SECRET` を設定、課金通知しきい値を設定
+   → `alphagraph tenant-provision --provider ... --region ... --ip <自分のIP>/32 --confirm CREATE`
+   → 出力された credential ファイルから `ALPHAGRAPH_TENANT_ADMIN_*` を設定
 2. `alphagraph tenant-init --execute` — 土台DDL（DB・派生テーブル・ロール・PROFILE・QUOTA・ROW POLICY）
 3. `alphagraph tenant-load-hl --coin BTC --start ... --end ... --execute` — 生データ公開レーンから
    HL日次スナップショットを取得し搭載。来歴は `dataset_provenance` にも入り csv_sha256 で突き合う
