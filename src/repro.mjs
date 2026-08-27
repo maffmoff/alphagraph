@@ -65,6 +65,8 @@ export function reproHashes(report) {
 }
 
 function differingPaths(left, right, prefix = "") {
+  // 片側にしか無いキー（undefined）はそこが差分。hashJsonはundefinedを直列化できない。
+  if (left === undefined || right === undefined) return [prefix || "(root)"];
   if (hashJson(left) === hashJson(right)) return [];
   const isObject = (value) => value && typeof value === "object" && !Array.isArray(value);
   if (!isObject(left) || !isObject(right)) return [prefix || "(root)"];

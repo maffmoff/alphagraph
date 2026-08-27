@@ -76,6 +76,17 @@ test("a changed number is a mismatch and names the differing path", () => {
   assert.ok(result.differences.includes("metrics.outOfSample.sharpe"));
 });
 
+test("a field present on only one side is reported as a difference, not a crash", () => {
+  // 実データ移植で発見: --provenance 付きの著者レポートは data.quality を持つが、
+  // 再現側の再実行はそれを持たない。片側にしか無いキーで差分列挙が落ちてはいけない。
+  const author = report();
+  author.data = { ...author.data, quality: { status: "pass", unexpectedIntervalGaps: 0, note: "No interval gaps were detected." } };
+  const candidate = report();
+  const result = compareReports(author, candidate);
+  assert.equal(result.verdict, "environment-drift");
+  assert.ok(result.differences.includes("data.quality"));
+});
+
 test("a different sealed code or dataset is not a grade-1 reproduction at all", () => {
   const author = report();
   const candidate = report({ bars: 900 });
