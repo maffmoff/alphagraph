@@ -16,6 +16,14 @@ import {
 import { hashJson, readJson, writeJson } from "./core.mjs";
 import { REPRO_CONTRACT_HASH, compareReports, reproHashes } from "./repro.mjs";
 import { citationLedger, sealPaper, verifyReveal } from "./paper.mjs";
+import {
+  INTAKE_CONTRACT,
+  INTAKE_CONTRACT_HASH,
+  buildSealRequest,
+  decideSealRequest,
+  rejectedEventData,
+  sealedEventData,
+} from "./intake.mjs";
 import { appendEvent, readLedger, verifyChain } from "./ledger.mjs";
 import { buildSite } from "./site.mjs";
 import { fetchRoomSince, selectNewEvaluations } from "./eval-intake.mjs";
@@ -29,6 +37,8 @@ Usage:
   alphagraph fetch-binance --symbol SYMBOL --interval INTERVAL --start ISO --end ISO [--output FILE]
   alphagraph backtest --proposal FILE --data CSV [--output FILE]
   alphagraph reproduce --report FILE --data CSV [--output FILE] [--identity PEM] [--paper HASH] [--ledger DIR]
+  alphagraph request-seal --paper FILE --identity PEM [--output FILE]
+  alphagraph intake --request FILE --identity PEM [--ledger DIR]
   alphagraph seal --paper FILE --identity PEM [--ledger DIR] [--output FILE] [--commitment FILE]
   alphagraph reveal --paper FILE --identity PEM [--ledger DIR] [--output DIR] [--early]
   alphagraph ledger-verify [--ledger DIR]
@@ -238,6 +248,49 @@ async function reproduce(args) {
   };
 }
 
+// 参加者側: 署名済みの封緘リクエストを作る。台帳には触らない。
+async function requestSeal(args) {
+  if (!args.paper || !args.identity) throw new Error("request-seal requires --paper FILE and --identity PEM.");
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const request = buildSealRequest(await readJson(args.paper), identity.privateKey);
+  const output = resolve(args.output ?? defaultOutput("requests", request.commitment.id, hashJson(request)));
+  await writeJson(output, request);
+  return {
+    message: "Signed seal request written. Post its hash to a public room before submitting: that is your proof of submission time.",
+    output,
+    requestHash: hashJson(request),
+    paperHash: request.commitment.paperHash,
+    did: identity.did,
+    contractHash: INTAKE_CONTRACT_HASH,
+  };
+}
+
+// 運営側: 公開契約を実行するだけ。受理も拒絶も台帳に残す。
+async function intake(args) {
+  if (!args.request || !args.identity) throw new Error("intake requires --request FILE and --identity PEM.");
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const request = await readJson(args.request);
+  const decision = decideSealRequest(await readLedger(ledgerDir), request);
+  const { event, path } = await appendEvent(ledgerDir, {
+    type: decision.accept ? "PAPER_SEALED" : "INTAKE_REJECTED",
+    data: decision.accept ? sealedEventData(request) : rejectedEventData(request, decision),
+    privateKey: identity.privateKey,
+  });
+  if (!decision.accept) process.exitCode = 1;
+  return {
+    message: decision.accept
+      ? "Accepted by the published intake contract and sealed."
+      : `Rejected by the published intake contract (${decision.reason}). The rejection is on the ledger, so silence is not an option for the operator.`,
+    accepted: decision.accept,
+    reason: decision.reason ?? null,
+    detail: decision.detail ?? null,
+    seq: event.seq,
+    ledgerEvent: path,
+    contractHash: INTAKE_CONTRACT_HASH,
+  };
+}
+
 async function seal(args) {
   if (!args.paper || !args.identity) throw new Error("seal requires --paper FILE and --identity PEM.");
   const identity = await loadIdentity(args.identity, identityPassphrase(args));
@@ -247,7 +300,8 @@ async function seal(args) {
   // 主張も方法も出ない。これが封緘＝commit-reveal の commit 側。
   const { event, path } = await appendEvent(ledgerDir, {
     type: "PAPER_SEALED",
-    data: sealed.commitment,
+    // 取込口経由と同じ形にそろえる（著者DIDと契約ハッシュを持つ）。
+    data: { ...sealed.commitment, authorDid: identity.did, contractHash: INTAKE_CONTRACT_HASH },
     privateKey: identity.privateKey,
   });
   const record = {
@@ -556,6 +610,8 @@ export async function runCli(argv) {
   if (command === "fetch-binance") return fetchBinance(args);
   if (command === "backtest") return backtest(args);
   if (command === "reproduce") return reproduce(args);
+  if (command === "request-seal") return requestSeal(args);
+  if (command === "intake") return intake(args);
   if (command === "seal") return seal(args);
   if (command === "reveal") return reveal(args);
   if (command === "ledger-verify") return ledgerVerify(args);

@@ -214,7 +214,8 @@ export async function buildSite(ledgerDirectory, outputDirectory) {
   const revealed = new Map(
     events.filter((event) => event.type === "PAPER_REVEALED").map((event) => [event.data.paperHash, event.data]),
   );
-  const metrics = { ...networkMetrics(graph, reproductions), revealed: [...revealed.keys()].filter((hash) => graph.some((node) => node.paperHash === hash)).length };
+  const rejected = events.filter((event) => event.type === "INTAKE_REJECTED").length;
+  const metrics = { ...networkMetrics(graph, reproductions), rejected, revealed: [...revealed.keys()].filter((hash) => graph.some((node) => node.paperHash === hash)).length };
 
   const rows = graph.map((node) => {
     const meta = sealedAt.get(node.paperHash);
@@ -250,6 +251,7 @@ export async function buildSite(ledgerDirectory, outputDirectory) {
     + `<div><b>再現率</b>${metrics.reproducedRate}% <span class="sealed">(${metrics.reproducedPapers}/${metrics.papers})</span></div>`
     + `<div><b>再現の試行</b>${metrics.reproductionAttempts}</div>`
     + `<div><b>全文公開済</b>${metrics.revealed}/${metrics.papers}</div>`
+    + `<div><b>取込拒絶</b>${metrics.rejected}</div>`
     + "</div>"
     + "<p class=\"lede\">論文の本数は指標にしません。孤立した論文は何本増えてもネットワークにならないので、"
     + "見るのは<b>引用で繋がっているか</b>と<b>再現されたか</b>の2つだけです。</p>"
