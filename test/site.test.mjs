@@ -96,9 +96,22 @@ test("the projection is deterministic and escapes untrusted ledger text", async 
       at: "2026-01-02T00:00:00.000Z",
     });
 
+    // 「即時公開」は方針であって公開そのものではない。PAPER_REVEALED が無ければ未公開。
+    const beforeReveal = await buildSite(directory, output);
+    assert.equal(beforeReveal.metrics.revealed, 0);
+    assert.ok((await readFile(beforeReveal.outputPath, "utf8")).includes("未公開"));
+    await appendEvent(directory, {
+      type: "PAPER_REVEALED",
+      data: { paperHash: hostile.paperHash, id: "ag-a", publishedPath: "papers/ag-a.json" },
+      privateKey,
+      at: "2026-01-03T00:00:00.000Z",
+    });
+
     const first = await buildSite(directory, output);
+    assert.equal(first.metrics.revealed, 1);
     const second = await buildSite(directory, output);
     assert.equal(first.pageSha256, second.pageSha256, "the same ledger must project to the same page");
+    assert.notEqual(first.pageSha256, beforeReveal.pageSha256, "revealing must change the projection");
     assert.equal(first.papers, 2);
     assert.equal(first.chainValid, true);
 

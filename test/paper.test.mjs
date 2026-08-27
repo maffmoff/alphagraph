@@ -127,3 +127,14 @@ test("an unknown event type is refused", () => {
     /Unknown ledger event type/,
   );
 });
+
+test("reveal is only meaningful against a seal; the seal is what makes early edits impossible", () => {
+  const sealed = sealPaper(base);
+  // 猶予期間中の論文も、封緘したハッシュと一致すれば全文は受け付けられる（早期公開は著者の権利）。
+  const embargoed = sealPaper({ ...base, disclosure: { policy: "embargo", embargoDays: 90 } });
+  assert.equal(verifyReveal({ ...base, disclosure: { policy: "embargo", embargoDays: 90 } }, embargoed.paperHash).valid, true);
+  // 猶予期間の長さを後から縮めた全文は別物になる。
+  assert.equal(verifyReveal({ ...base, disclosure: { policy: "embargo", embargoDays: 30 } }, embargoed.paperHash).valid, false);
+  // 主張を後から足した全文も別物になる。
+  assert.equal(verifyReveal({ ...base, claim: `${base.claim} 追記。` }, sealed.paperHash).valid, false);
+});

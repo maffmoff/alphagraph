@@ -1,7 +1,7 @@
 {
   "schema": "alphagraph-ledger-head-v1",
-  "seq": 7,
-  "hash": "571311800e1214f7710e873850a78e9ab9d7a832f05ce6bab6c2b5403e468f29",
-  "type": "REPRODUCTION_RECORDED",
-  "at": "2026-08-27T06:51:10.378Z"
+  "seq": 10,
+  "hash": "b07aac38156e8335c975ea994190622749015f64b78979ea91511e2ad6436ed7",
+  "type": "PAPER_REVEALED",
+  "at": "2026-08-27T07:06:56.571Z"
 }

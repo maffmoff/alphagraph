@@ -209,13 +209,19 @@ export async function buildSite(ledgerDirectory, outputDirectory) {
   const sealedAt = new Map(sealed.map((event) => [event.data.paperHash, { at: event.at, seq: event.seq }]));
   const graph = buildGraph(sealed.map((event) => event.data));
   const reproductions = events.filter((event) => event.type === "REPRODUCTION_RECORDED").map((event) => event.data);
-  const metrics = networkMetrics(graph, reproductions);
+  // 「即時公開」は方針であって、公開そのものではない。実際に全文が出たかは
+  // PAPER_REVEALED があるかどうかでしか判定しない。
+  const revealed = new Map(
+    events.filter((event) => event.type === "PAPER_REVEALED").map((event) => [event.data.paperHash, event.data]),
+  );
+  const metrics = { ...networkMetrics(graph, reproductions), revealed: [...revealed.keys()].filter((hash) => graph.some((node) => node.paperHash === hash)).length };
 
   const rows = graph.map((node) => {
     const meta = sealedAt.get(node.paperHash);
     const counts = Object.entries(node.counts).sort(([a], [b]) => a.localeCompare(b))
       .map(([kind, count]) => `${KIND_STYLE.get(kind)?.label ?? kind} ${count}`).join(" / ");
-    const disclosure = disclosureLabel(node.disclosure);
+    const reveal = revealed.get(node.paperHash);
+    const disclosure = `${disclosureLabel(node.disclosure)}${reveal ? " · 公開済" : " · 未公開"}`;
     return "<tr>"
       + `<td><code>${escapeHtml(node.id)}</code></td>`
       + `<td>${escapeHtml(node.type)}</td>`
@@ -243,6 +249,7 @@ export async function buildSite(ledgerDirectory, outputDirectory) {
     + `<div><b>孤立</b>${metrics.isolated}</div>`
     + `<div><b>再現率</b>${metrics.reproducedRate}% <span class="sealed">(${metrics.reproducedPapers}/${metrics.papers})</span></div>`
     + `<div><b>再現の試行</b>${metrics.reproductionAttempts}</div>`
+    + `<div><b>全文公開済</b>${metrics.revealed}/${metrics.papers}</div>`
     + "</div>"
     + "<p class=\"lede\">論文の本数は指標にしません。孤立した論文は何本増えてもネットワークにならないので、"
     + "見るのは<b>引用で繋がっているか</b>と<b>再現されたか</b>の2つだけです。</p>"

@@ -1,0 +1,57 @@
+{
+  "schema": "alphagraph-paper-v1",
+  "type": "dataset",
+  "id": "ag-d-0001",
+  "title": "Hyperliquid perp 日次OHLCVと ユニバース・スナップショット（公開APIレーン）",
+  "claim": "HL公開info APIから取得した日次OHLCVとperpユニバースは、資格情報なしで誰でも同一バイト列を再取得でき、等級1再現の土台として使える。",
+  "mechanism": "HLは全建玉と約定がチェーン上で公開される設計であり、info APIは無認証。したがってデータの入手可能性が特定主体に依存しない。再配布可否の制約も生じない。",
+  "whoPays": "払い手は存在しない（このデータ自体はエッジではない）。価値は、他の論文が同じ系列を釘付けして参照できることにある。",
+  "verification": {
+    "data": [
+      {
+        "seriesId": "hl:BTC:1d:2025-08-01/2026-08-25",
+        "sha256": "59c0fc83f83f1ec3482cfce9045aded022b4dfdae9f039e8ae9505e5b12c12e0",
+        "source": "Hyperliquid public info API",
+        "url": "https://api.hyperliquid.xyz/info",
+        "license": "public on-chain / public API data",
+        "redistributable": true
+      },
+      {
+        "seriesId": "hl:ETH:1d:2025-08-01/2026-08-25",
+        "sha256": "d083815563bacf1998f29f3be6e0db89d7d043c6272c7db2e108ffd97e09a0b4",
+        "source": "Hyperliquid public info API",
+        "url": "https://api.hyperliquid.xyz/info",
+        "license": "public on-chain / public API data",
+        "redistributable": true
+      },
+      {
+        "seriesId": "hl:SOL:1d:2025-08-01/2026-08-25",
+        "sha256": "79d695a3a8a500850b49671edb8a9aef194b59f130a26c4fa141f3dc70df8ef8",
+        "source": "Hyperliquid public info API",
+        "url": "https://api.hyperliquid.xyz/info",
+        "license": "public on-chain / public API data",
+        "redistributable": true
+      },
+      {
+        "seriesId": "hl:perp-universe:2026-08-27",
+        "sha256": "8f852ec855bfc0e64d8202655bc711843c2c68018310d4ae77dbf4bf09eaadfb",
+        "source": "Hyperliquid public info API",
+        "url": "https://api.hyperliquid.xyz/info",
+        "license": "public on-chain / public API data",
+        "redistributable": true
+      }
+    ],
+    "method": "src/data-source.mjs の fetchHyperliquidCandles / fetchHyperliquidUniverse を、公開許可リスト経由でのみ実行する。取得したCSVのsha256を来歴に記録する。",
+    "successCriteria": "同一のcoin・interval・期間指定に対し、別のマシンから取得したCSVのsha256が一致すること。",
+    "costs": "取得コストのみ。売買コストは発生しない。"
+  },
+  "citations": [],
+  "runtime": {
+    "engine": "alphagraph",
+    "version": "0.2.0",
+    "node": ">=20"
+  },
+  "disclosure": {
+    "policy": "immediate"
+  }
+}

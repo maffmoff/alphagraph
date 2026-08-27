@@ -15,7 +15,7 @@ import {
 } from "./did.mjs";
 import { hashJson, readJson, writeJson } from "./core.mjs";
 import { REPRO_CONTRACT_HASH, compareReports, reproHashes } from "./repro.mjs";
-import { citationLedger, sealPaper } from "./paper.mjs";
+import { citationLedger, sealPaper, verifyReveal } from "./paper.mjs";
 import { appendEvent, readLedger, verifyChain } from "./ledger.mjs";
 import { buildSite } from "./site.mjs";
 import { fetchHyperliquidCandles, fetchHyperliquidUniverse } from "./data-source.mjs";
@@ -29,6 +29,7 @@ Usage:
   alphagraph backtest --proposal FILE --data CSV [--output FILE]
   alphagraph reproduce --report FILE --data CSV [--output FILE] [--identity PEM] [--paper HASH] [--ledger DIR]
   alphagraph seal --paper FILE --identity PEM [--ledger DIR] [--output FILE] [--commitment FILE]
+  alphagraph reveal --paper FILE --identity PEM [--ledger DIR] [--output DIR] [--early]
   alphagraph ledger-verify [--ledger DIR]
   alphagraph citations [--ledger DIR]
   alphagraph site [--ledger DIR] [--output DIR]
@@ -58,6 +59,9 @@ Safety:
   Technocore is written only by the publish command with --confirm PUBLISH.
 `;
 
+// 値を取らない真偽フラグ。ここに無い --key は値を要求する。
+const BOOLEAN_FLAGS = new Set(["early"]);
+
 function parseArgs(argv) {
   const result = { _: [] };
   for (let index = 0; index < argv.length; index += 1) {
@@ -67,6 +71,10 @@ function parseArgs(argv) {
       continue;
     }
     const key = argument.slice(2);
+    if (BOOLEAN_FLAGS.has(key)) {
+      result[key] = true;
+      continue;
+    }
     const value = argv[index + 1];
     if (value === undefined || value.startsWith("--")) throw new Error(`Missing value for --${key}.`);
     result[key] = value;
@@ -267,6 +275,67 @@ async function seal(args) {
   };
 }
 
+// reveal＝commit-reveal の reveal 側（docs/fable-concept.md §2、docs/ledger-design.md 部品2）。
+// 猶予期間の満了時に全文を公開し、台帳が封緘時のハッシュとの一致を検証する。
+// 一致しない全文は受け付けない——後から主張を書き換える経路を塞ぐのが封緘の目的なので、
+// ここを緩めると制度全体が意味を失う。
+async function reveal(args) {
+  if (!args.paper || !args.identity) throw new Error("reveal requires --paper FILE and --identity PEM.");
+  const identity = await loadIdentity(args.identity, identityPassphrase(args));
+  const paper = await readJson(args.paper);
+  const ledgerDir = resolve(args.ledger ?? "ledger");
+  const events = await readLedger(ledgerDir);
+  const sealedEvent = events.find(
+    (event) => event.type === "PAPER_SEALED" && event.data.paperHash === hashJson(paper),
+  );
+  if (!sealedEvent) {
+    throw new Error("No PAPER_SEALED event on this ledger matches the submitted full text. Reveal is refused.");
+  }
+  const check = verifyReveal(paper, sealedEvent.data.paperHash);
+  if (!check.valid) throw new Error(`Revealed text hashes to ${check.paperHash}, not the sealed ${check.expected}.`);
+  if (events.some((event) => event.type === "PAPER_REVEALED" && event.data.paperHash === check.paperHash)) {
+    throw new Error("This paper has already been revealed on the ledger.");
+  }
+  // 猶予期間中の早期公開は著者の権利だが（猶予は上限であって義務ではない・§2）、
+  // 事故で出してしまうと取り返しがつかない。明示的な --early を要求する。
+  // 起点は封緘時とする（未決1: 起点をラウンド退出時にする案が未決）。
+  if (sealedEvent.data.disclosure?.policy === "embargo" && !("early" in args)) {
+    const endsAt = Date.parse(sealedEvent.at) + (sealedEvent.data.disclosure.embargoDays * 86_400_000);
+    if (Date.now() < endsAt) {
+      const daysLeft = Math.ceil((endsAt - Date.now()) / 86_400_000);
+      throw new Error(
+        `Embargo has ${daysLeft} day(s) left (until ${new Date(endsAt).toISOString()}). `
+        + "Revealing early is allowed but must be deliberate: pass --early.",
+      );
+    }
+  }
+
+  // 全文は公開ディレクトリへ。ここに置かれたものが「公開された」の実体になる。
+  const publicDir = resolve(args.output ?? "papers");
+  const publicPath = resolve(publicDir, `${sealedEvent.data.id}.json`);
+  await writeJson(publicPath, paper);
+
+  const { event, path } = await appendEvent(ledgerDir, {
+    type: "PAPER_REVEALED",
+    data: {
+      paperHash: check.paperHash,
+      id: sealedEvent.data.id,
+      sealedSeq: sealedEvent.seq,
+      sealedAt: sealedEvent.at,
+      publishedPath: `papers/${sealedEvent.data.id}.json`,
+      revealedBy: identity.did,
+    },
+    privateKey: identity.privateKey,
+  });
+  return {
+    message: "Full text published and matched against the seal. The paper is now citable in full.",
+    paper: publicPath,
+    ledgerEvent: path,
+    paperHash: check.paperHash,
+    seq: event.seq,
+  };
+}
+
 async function ledgerVerify(args) {
   const ledgerDir = resolve(args.ledger ?? "ledger");
   const result = verifyChain(await readLedger(ledgerDir));
@@ -452,6 +521,7 @@ export async function runCli(argv) {
   if (command === "backtest") return backtest(args);
   if (command === "reproduce") return reproduce(args);
   if (command === "seal") return seal(args);
+  if (command === "reveal") return reveal(args);
   if (command === "ledger-verify") return ledgerVerify(args);
   if (command === "citations") return citations(args);
   if (command === "site") return site(args);
