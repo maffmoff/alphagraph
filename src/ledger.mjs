@@ -9,8 +9,10 @@ import { verify as cryptoVerify } from "node:crypto";
 // 改竄・遅延・削除は誰にでも検出可能。信頼モデルは「防止でなく検出」。
 export const LEDGER_EVENT_TYPES = new Set([
   "PAPER_SEALED",
+  "INTAKE_REJECTED",
   "PAPER_REVEALED",
   "REPRODUCTION_RECORDED",
+  "CONTRACT_CHANGED",
   "EVALUATION_SIGNED",
   "SERIES_REGISTERED",
   "PAYOUT",

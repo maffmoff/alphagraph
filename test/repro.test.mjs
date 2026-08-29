@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { generateSyntheticCsv, parseOhlcvCsv, runBacktest } from "../src/backtest.mjs";
 import { sha256 } from "../src/core.mjs";
-import { REPRO_CONTRACT_HASH, canonicalizeReport, compareReports, reproHashes } from "../src/repro.mjs";
+import { REPRO_CONTRACT, REPRO_CONTRACT_HASH, canonicalizeReport, compareReports, reproHashes } from "../src/repro.mjs";
 
 const strategy = {
   schema: "alphagraph-strategy-v1",
@@ -22,13 +22,27 @@ function report({ bars = 800, label = "fixture", overrides = {} } = {}) {
 }
 
 test("the canonical form drops every non-deterministic field", () => {
-  const canonical = canonicalizeReport(report());
+  const source = report();
+  source.data = {
+    ...source.data,
+    provenance: { schema: "alphagraph-market-data-v1", fetchedAt: "2026-08-27T00:00:00.000Z" },
+    quality: { status: "pass", unexpectedIntervalGaps: 0, note: "No interval gaps were detected." },
+  };
+  const canonical = canonicalizeReport(source);
   assert.equal("createdAt" in canonical, false);
   assert.equal("proposal" in canonical, false);
   assert.equal("reproduction" in canonical, false);
   assert.equal("label" in canonical.data, false);
   assert.equal("provenance" in canonical.data, false);
+  assert.equal("quality" in canonical.data, false);
   assert.equal(canonical.data.sha256.length, 64);
+});
+
+test("the v2 contract pins its predecessor", () => {
+  assert.ok(REPRO_CONTRACT.drop.includes("data.quality"));
+  assert.equal(REPRO_CONTRACT.supersedes.schema, "alphagraph-repro-contract-v1");
+  assert.equal(REPRO_CONTRACT.supersedes.hash.length, 64);
+  assert.notEqual(REPRO_CONTRACT.supersedes.hash, REPRO_CONTRACT_HASH);
 });
 
 test("an honest re-run reproduces the author hash despite different metadata", () => {
@@ -74,6 +88,33 @@ test("a changed number is a mismatch and names the differing path", () => {
   const result = compareReports(author, candidate);
   assert.equal(result.verdict, "mismatch");
   assert.ok(result.differences.includes("metrics.outOfSample.sharpe"));
+});
+
+test("a field present on only one side is reported as a difference, not a crash", () => {
+  // 実データ移植で発見。片側にしか無いキーで差分列挙が hashJson(undefined) で落ちてはいけない。
+  // 元の実例だった data.quality は契約v2で正規形から落ちたので、正規形に残る別のキーで検証する。
+  const author = report();
+  author.assumptions = { ...author.assumptions, extraNote: "author-only disclosure" };
+  const candidate = report();
+  const result = compareReports(author, candidate);
+  assert.equal(result.verdict, "environment-drift");
+  assert.ok(result.differences.includes("assumptions.extraNote"));
+});
+
+test("a provenance-built author report reproduces against a plain re-run", () => {
+  // 契約v2の動機。--provenance 付きの著者レポートは data.provenance と data.quality を持つが、
+  // 再現者の再実行は持たない。これが理由で match が構造的に不可能になってはいけない。
+  const author = report();
+  author.data = {
+    ...author.data,
+    provenance: { schema: "alphagraph-market-data-v1", fetchedAt: "2026-08-27T00:00:00.000Z" },
+    quality: { status: "pass", unexpectedIntervalGaps: 0, note: "No interval gaps were detected." },
+  };
+  const candidate = report();
+  const result = compareReports(author, candidate);
+  assert.equal(result.verdict, "match");
+  assert.equal(result.reproduced, true);
+  assert.deepEqual(result.differences, []);
 });
 
 test("a different sealed code or dataset is not a grade-1 reproduction at all", () => {
